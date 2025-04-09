@@ -1,0 +1,5 @@
+.terraform*
+*.tf
+.python-version
+plan.txt
+__pycache__
