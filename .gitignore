@@ -3,3 +3,6 @@
 .python-version
 plan.txt
 __pycache__
+env
+.venv
+dist

@@ -7,19 +7,19 @@ class S3Terraformer(Terraformer):
     def __init__(self, file_path: str, migration_context: MigrationContext):
         super().__init__(file_path, migration_context)
 
-        self.binaries_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket.binaries"
+        self.binaries_resource_name = "module.spacelift.module.s3.aws_s3_bucket.binaries"
+        self.binaries_encryption_resource_name = (
+            "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.binaries"
         )
-        self.binaries_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.binaries"
         self.binaries_versioning_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_versioning.binaries"
         )
 
-        self.deliveries_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket.deliveries"
-        )
+        self.deliveries_resource_name = "module.spacelift.module.s3.aws_s3_bucket.deliveries"
         self.deliveries_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.deliveries"
-        self.deliveries_lifecycle_resource_name = "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.deliveries"
+        self.deliveries_lifecycle_resource_name = (
+            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.deliveries"
+        )
         self.deliveries_public_access_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_public_access_block.deliveries"
         )
@@ -31,13 +31,17 @@ class S3Terraformer(Terraformer):
         self.large_queue_versioning_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_versioning.large_queue_messages"
         )
-        self.large_queue_lifecycle_resource_name = "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.large_queue_messages"
-        self.large_queue_public_access_resource_name = "module.spacelift.module.s3.aws_s3_bucket_public_access_block.large_queue_messages"
-
-        self.metadata_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket.metadata"
+        self.large_queue_lifecycle_resource_name = (
+            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.large_queue_messages"
         )
-        self.metadata_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.metadata"
+        self.large_queue_public_access_resource_name = (
+            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.large_queue_messages"
+        )
+
+        self.metadata_resource_name = "module.spacelift.module.s3.aws_s3_bucket.metadata"
+        self.metadata_encryption_resource_name = (
+            "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.metadata"
+        )
         self.metadata_versioning_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_versioning.metadata"
         )
@@ -49,7 +53,9 @@ class S3Terraformer(Terraformer):
         )
 
         self.modules_resource_name = "module.spacelift.module.s3.aws_s3_bucket.modules"
-        self.modules_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.modules"
+        self.modules_encryption_resource_name = (
+            "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.modules"
+        )
         self.modules_versioning_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_versioning.modules"
         )
@@ -60,22 +66,22 @@ class S3Terraformer(Terraformer):
             "module.spacelift.module.s3.aws_s3_bucket_public_access_block.modules"
         )
 
-        self.policy_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket.policy_inputs"
-        )
+        self.policy_resource_name = "module.spacelift.module.s3.aws_s3_bucket.policy_inputs"
         self.policy_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.policy_inputs"
         self.policy_versioning_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_versioning.policy_inputs"
         )
-        self.policy_lifecycle_resource_name = "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.policy_inputs"
+        self.policy_lifecycle_resource_name = (
+            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.policy_inputs"
+        )
         self.policy_public_access_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_public_access_block.policy_inputs"
         )
 
-        self.run_logs_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket.run_logs"
+        self.run_logs_resource_name = "module.spacelift.module.s3.aws_s3_bucket.run_logs"
+        self.run_logs_encryption_resource_name = (
+            "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.run_logs"
         )
-        self.run_logs_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.run_logs"
         self.run_logs_versioning_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_versioning.run_logs"
         )
@@ -87,7 +93,9 @@ class S3Terraformer(Terraformer):
         )
 
         self.states_resource_name = "module.spacelift.module.s3.aws_s3_bucket.states"
-        self.states_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.states"
+        self.states_encryption_resource_name = (
+            "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.states"
+        )
         self.states_versioning_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_versioning.states"
         )
@@ -96,7 +104,9 @@ class S3Terraformer(Terraformer):
         )
 
         self.uploads_resource_name = "module.spacelift.module.s3.aws_s3_bucket.uploads"
-        self.uploads_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.uploads"
+        self.uploads_encryption_resource_name = (
+            "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.uploads"
+        )
         self.uploads_versioning_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_versioning.uploads"
         )
@@ -110,32 +120,29 @@ class S3Terraformer(Terraformer):
             "module.spacelift.module.s3.aws_s3_bucket_cors_configuration.uploads[0]"
         )
 
-        self.user_uploads_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket.user_uploads"
-        )
+        self.user_uploads_resource_name = "module.spacelift.module.s3.aws_s3_bucket.user_uploads"
         self.user_uploads_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.user_uploads"
         self.user_uploads_versioning_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_versioning.user_uploads"
         )
-        self.user_uploads_lifecycle_resource_name = "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.user_uploads"
+        self.user_uploads_lifecycle_resource_name = (
+            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.user_uploads"
+        )
         self.user_uploads_public_access_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_public_access_block.user_uploads"
         )
 
-        self.workspace_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket.workspaces"
-        )
+        self.workspace_resource_name = "module.spacelift.module.s3.aws_s3_bucket.workspaces"
         self.workspace_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.workspaces"
         self.workspace_versioning_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_versioning.workspaces"
         )
-        self.workspace_lifecycle_resource_name = "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.workspaces"
+        self.workspace_lifecycle_resource_name = (
+            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.workspaces"
+        )
         self.workspace_public_access_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_public_access_block.workspaces"
         )
-
-        with open(self.file_path, "w") as f:
-            f.write("# S3 buckets\n\n")
 
     def s3_to_terraform(
         self,
@@ -146,9 +153,7 @@ class S3Terraformer(Terraformer):
         public_access_blocked,
         cors_rules: List[Dict],
     ):
-        if (
-            "downloads" in bucketName
-        ):  # In v2 we called it downloads, in v3 we call it binaries
+        if "downloads" in bucketName:  # In v2 we called it downloads, in v3 we call it binaries
             self.migration_context.binaries_bucket_name = bucketName
             self.process(self.binaries_resource_name, bucketName)
             if versioning_enabled:
@@ -240,7 +245,7 @@ class S3Terraformer(Terraformer):
             self.migration_context.uploads_bucket_name = bucketName
             self.process(self.uploads_resource_name, bucketName)
             for rule in cors_rules:
-                allowed_origins = rule.get("AllowedOrigins")
+                allowed_origins = rule.get("AllowedOrigins", [])
                 if len(allowed_origins) > 0:
                     self.migration_context.cors_origin = allowed_origins[0]
                     self.process(self.uploads_cors_resource_name, bucketName)
