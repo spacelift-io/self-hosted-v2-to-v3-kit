@@ -1,1 +1,2 @@
 boto3==1.37.29
+packaging==25.0

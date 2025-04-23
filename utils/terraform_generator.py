@@ -1,15 +1,32 @@
 from pathlib import Path
 from typing import List, Optional
 from converters.migration_context import MigrationContext
+import os
+import shutil
 
 
-def generate_main_tf(
+def generate_tf_files(
     unique_suffix: Optional[str], context: MigrationContext, output_dir: str
 ) -> None:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    generate_bash_script(context, output_path)
+    shutil.copyfile(
+        str(Path(__file__).parent.parent / "README.md"),
+        str(output_path / "README.md"),
+    )
+    shutil.copyfile(
+        str(Path(__file__).parent / "nat_gateway_refactor.py"),
+        str(output_path / "nat_gateway_refactor.py"),
+    )
+    shutil.copyfile(
+        str(Path(__file__).parent / "delete_cf_stacks.py"),
+        str(output_path / "delete_cf_stacks.py"),
+    )
+
+    replace_variables_in_gateway_refactor_file(
+        context, str(output_path / "nat_gateway_refactor.py")
+    )
 
     data_source_file = output_path / "data_sources.tf"
     data_source_file.unlink(missing_ok=True)
@@ -57,32 +74,37 @@ def write_main_terraform_content(f, unique_suffix: str, context: MigrationContex
     f.write(create_spacelift_services_module(context))
 
 
-def generate_bash_script(context: MigrationContext, output_path: Path) -> None:
-    script_file = output_path / "first_step.sh"
-    script_file.unlink(missing_ok=True)
-    script_file.touch()
+def replace_variables_in_gateway_refactor_file(
+    context: MigrationContext, script_file_path: str
+) -> None:
+    with open(script_file_path, "r") as template_file:
+        template_content = template_file.read()
 
-    with open(script_file, "a") as f:
-        f.write("#!/bin/bash\n\n")
-        if context.gateway2_association_id:
-            f.write(
-                f"aws ec2 disassociate-route-table --no-cli-pager --region {context.region} --association-id {context.gateway2_association_id} --output json\n"
-            )
-        if context.gateway3_association_id:
-            f.write(
-                f"aws ec2 disassociate-route-table --no-cli-pager --region {context.region} --association-id {context.gateway3_association_id} --output json\n"
-            )
-        f.write(
-            f"aws ec2 associate-route-table --no-cli-pager --region {context.region} --subnet-id {context.public_subnet_id_2} --route-table-id {context.gateway1_route_table_id} --output json\n"
-        )
-        f.write(
-            f"aws ec2 associate-route-table --no-cli-pager --region {context.region} --subnet-id {context.public_subnet_id_3} --route-table-id {context.gateway1_route_table_id} --output json"
-        )
+    # Replace template placeholders with actual values
+    script_content = template_content
+    script_content = script_content.replace("{REGION}", context.region)
+    script_content = script_content.replace(
+        "{GATEWAY1_ROUTE_TABLE_ID}", context.gateway1_route_table_id
+    )
+    script_content = script_content.replace("{PUBLIC_SUBNET_ID_2}", context.public_subnet_id_2)
+    script_content = script_content.replace("{PUBLIC_SUBNET_ID_3}", context.public_subnet_id_3)
+
+    # Handle optional parameters
+    gateway2_id = context.gateway2_association_id if context.gateway2_association_id else "None"
+    gateway3_id = context.gateway3_association_id if context.gateway3_association_id else "None"
+    script_content = script_content.replace("{GATEWAY2_ASSOCIATION_ID}", gateway2_id)
+    script_content = script_content.replace("{GATEWAY3_ASSOCIATION_ID}", gateway3_id)
+
+    with open(script_file_path, "w") as f:
+        f.write(script_content)
+
+    # Make the script executable
+    os.chmod(script_file_path, 0o755)
 
 
 def create_terraform_provider_block(context: MigrationContext) -> str:
     return f"""
-# Apply this file once first_step.sh finished running
+# Apply this file once nat_gateway_refactor.py script has finished running
 
 terraform {{
   required_providers {{
@@ -91,6 +113,8 @@ terraform {{
       version = "~> 5.0"
     }}
   }}
+
+  # Optionally, set up a remote backend here
 }}
 
 provider "aws" {{
@@ -121,7 +145,7 @@ def create_spacelift_module(unique_suffix: str, context: MigrationContext) -> st
 
     return f"""        
 module "spacelift" {{
-  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v2-v3-migration-improvements"
+  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=main"
 
   region           = local.region
   website_endpoint = local.website_endpoint
@@ -180,7 +204,7 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
     return f"""
 # Uncomment after the above module applied successfully
 #module "spacelift_services" {{
-#  source = "github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted?ref=add-sqs-queues-and-iot"
+#  source = "github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted?ref=main"
 #  
 #  region               = local.region
 #  unique_suffix        = module.spacelift.unique_suffix
@@ -192,9 +216,43 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #  encryption_type        = "kms"
 #  kms_encryption_key_arn = aws_kms_key.encryption_primary.arn
 #  kms_signing_key_arn    = aws_kms_key.jwt.arn
-#  
-#  database_url           = format("postgres://%s:%s@%s:5432/spacelift?statement_cache_capacity=0", module.spacelift.rds_username, module.spacelift.rds_password, module.spacelift.rds_cluster_endpoint)
-#  database_read_only_url = format("postgres://%s:%s@%s:5432/spacelift?statement_cache_capacity=0", module.spacelift.rds_username, module.spacelift.rds_password, module.spacelift.rds_cluster_reader_endpoint)
+# 
+#  secrets_manager_secret_arns = [
+#    module.spacelift.database_secret_arn,
+#    aws_secretsmanager_secret.slack_credentials.arn,
+#    aws_secretsmanager_secret.additional_root_ca_certificates.arn,
+#    aws_secretsmanager_secret.saml_credentials.arn,
+#  ]
+#  sensitive_env_vars          = [
+#    {{
+#      name = "SAML_CERT"
+#      valueFrom = "${{aws_secretsmanager_secret.saml_credentials.arn}}:certificate::"
+#    }},
+#    {{
+#      name = "SAML_KEY"
+#      valueFrom = "${{aws_secretsmanager_secret.saml_credentials.arn}}:key::"
+#    }},
+#    {{
+#      name = "SLACK_APP_CLIENT_ID"
+#      valueFrom = "${{aws_secretsmanager_secret.slack_credentials.arn}}:SLACK_APP_CLIENT_ID::"
+#    }},
+#    {{
+#      name = "SLACK_APP_CLIENT_SECRET"
+#      valueFrom = "${{aws_secretsmanager_secret.slack_credentials.arn}}:SLACK_APP_CLIENT_SECRET::"
+#    }},
+#    {{
+#      name = "SLACK_SECRET"
+#      valueFrom = "${{aws_secretsmanager_secret.slack_credentials.arn}}:SLACK_SECRET::"
+#    }},
+#    {{
+#      name = "DATABASE_URL"
+#      valueFrom = "${{module.spacelift.database_secret_arn}}:DATABASE_URL::"
+#    }},
+#    {{
+#      name = "DATABASE_READ_ONLY_URL"
+#      valueFrom = "${{module.spacelift.database_secret_arn}}:DATABASE_READ_ONLY_URL::"
+#    }}
+#  ]
 #  
 #  backend_image      = module.spacelift.ecr_backend_repository_url
 #  backend_image_tag  = local.spacelift_version
@@ -300,6 +358,24 @@ resource "aws_secretsmanager_secret" "db_pw" {
 resource "aws_secretsmanager_secret" "slack_credentials" {
   name        = "spacelift/slack-application"
   description = "Contains the Spacelift Slack application configuration"
+  kms_key_id  = aws_kms_key.master.arn
+}
+
+resource "aws_secretsmanager_secret" "additional_root_ca_certificates" {
+  name        = "spacelift/additional-root-ca-certificates"
+  description = "Contains additional CA certificates to use when making HTTPS requests"
+  kms_key_id  = aws_kms_key.master.arn
+}
+
+resource "aws_secretsmanager_secret" "external" {
+  name        = "spacelift/external"
+  description = "Externally managed and supplied secrets used by Spacelift app"
+  kms_key_id  = aws_kms_key.master.arn
+}
+
+resource "aws_secretsmanager_secret" "saml_credentials" {
+  name        = "spacelift/saml-credentials"
+  description = "Contains the SAML certificate and signing key"
   kms_key_id  = aws_kms_key.master.arn
 }
 """.lstrip()

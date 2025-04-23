@@ -1,6 +1,8 @@
 import boto3
+import sys
 from pathlib import Path
 from typing import Optional
+from packaging import version
 
 from converters.ecr_to_terraform import ECRTerraformer
 from converters.iot_to_terraform import IOTTerraformer
@@ -26,7 +28,7 @@ from scanners.ec2_scanner import scan_ec2_resources
 from scanners.ecr_scanner import scan_ecr_resources
 from scanners.rds_scanner import scan_rds_resources
 from scanners.sm_scanner import scan_sm_resources
-from utils.terraform_generator import generate_main_tf
+from utils.terraform_generator import generate_tf_files
 
 
 def initialize_output_dir(output_dir: str) -> str:
@@ -67,6 +69,35 @@ def get_certificate_arn(session: boto3.Session) -> str:
         raise ValueError(f"Failed to get certificate ARN from load balancer: {e}")
 
 
+def check_version_requirement(session: boto3.Session) -> None:
+    param_name = "/spacelift/install-version"
+    min_version_str = "2.6.0"
+    min_version = version.parse(min_version_str)
+
+    version_str = get_ssm_parameter(session, param_name)
+    if not version_str:
+        print(
+            f"Warning: SSM Parameter '{param_name}' not found. Cannot verify version requirements."
+        )
+        return
+
+    # Parse the version, handling both formats with and without 'v' prefix
+    try:
+        current_version = version.parse(version_str.lstrip("v"))
+        print(f"Found Spacelift version: {version_str}")
+    except ValueError:
+        print(f"Warning: Could not parse version string: {version_str}")
+        return
+
+    if current_version < min_version:
+        print(f"Error: Required minimum version is {min_version_str}, but found {version_str}")
+        sys.exit(1)
+
+    print(
+        f"Version check passed: {version_str} meets or exceeds required minimum version {min_version_str}"
+    )
+
+
 def get_unique_suffix(session: boto3.Session) -> str:
     param_name = "/spacelift/random-suffix"
 
@@ -83,6 +114,7 @@ def get_unique_suffix(session: boto3.Session) -> str:
 def main(region: str, profile: Optional[str], output_dir: str) -> None:
     session = create_session(region, profile)
 
+    check_version_requirement(session)
     unique_suffix = get_unique_suffix(session)
 
     terraform_file = initialize_output_dir(output_dir)
@@ -112,7 +144,7 @@ def main(region: str, profile: Optional[str], output_dir: str) -> None:
     scan_iot_resources(iot_terraformer)
     scan_sqs_resources(session, sqs_terraformer)
 
-    generate_main_tf(unique_suffix, migration_context, output_dir)
+    generate_tf_files(unique_suffix, migration_context, output_dir)
 
     print(
         f"Terraform files have been generated in the following directory: {output_dir}\n"
