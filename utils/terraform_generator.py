@@ -15,18 +15,20 @@ def generate_tf_files(
         str(Path(__file__).parent.parent / "README.md"),
         str(output_path / "README.md"),
     )
-    shutil.copyfile(
-        str(Path(__file__).parent / "nat_gateway_refactor.py"),
-        str(output_path / "nat_gateway_refactor.py"),
-    )
+
     shutil.copyfile(
         str(Path(__file__).parent / "delete_cf_stacks.py"),
         str(output_path / "delete_cf_stacks.py"),
     )
 
-    replace_variables_in_gateway_refactor_file(
-        context, str(output_path / "nat_gateway_refactor.py")
-    )
+    if not context.uses_custom_vpc:
+        shutil.copyfile(
+            str(Path(__file__).parent / "internet_gateway_refactor.py"),
+            str(output_path / "internet_gateway_refactor.py"),
+        )
+        replace_variables_in_gateway_refactor_file(
+            context, str(output_path / "internet_gateway_refactor.py")
+        )
 
     data_source_file = output_path / "data_sources.tf"
     data_source_file.unlink(missing_ok=True)
@@ -103,9 +105,15 @@ def replace_variables_in_gateway_refactor_file(
 
 
 def create_terraform_provider_block(context: MigrationContext) -> str:
-    return f"""
-# Apply this file once nat_gateway_refactor.py script has finished running
+    if context.uses_custom_vpc:
+        top_of_file_message = ""
+    else:
+        top_of_file_message = (
+            "# Apply this file once internet_gateway_refactor.py script has finished running\n\n"
+        )
 
+    return f"""
+{top_of_file_message}
 terraform {{
   required_providers {{
     aws = {{
@@ -120,7 +128,7 @@ terraform {{
 provider "aws" {{
   region = local.region
 }}
-"""
+""".lstrip()
 
 
 def create_locals_block(context: MigrationContext) -> str:
@@ -140,8 +148,20 @@ def format_subnet_cidr_blocks(cidr_blocks: List[str]) -> str:
 
 
 def create_spacelift_module(unique_suffix: str, context: MigrationContext) -> str:
-    public_subnet_cidr_blocks = format_subnet_cidr_blocks(context.public_subnet_cidr_blocks)
-    private_subnet_cidr_blocks = format_subnet_cidr_blocks(context.private_subnet_cidr_blocks)
+    if context.uses_custom_vpc:
+        vpc_config = """
+  create_vpc             = false
+  rds_subnet_ids         = ["<TODO: since you use a custom VPC, you'll need to set this manually. these should be private subnets>"]
+  rds_security_group_ids = ["<TODO: since you use a custom VPC, you'll need to set this manually>"]
+"""
+    else:
+        public_subnet_cidr_blocks = format_subnet_cidr_blocks(context.public_subnet_cidr_blocks)
+        private_subnet_cidr_blocks = format_subnet_cidr_blocks(context.private_subnet_cidr_blocks)
+        vpc_config = f"""
+  vpc_cidr_block             = "{context.vpc_cidr_block}"
+  public_subnet_cidr_blocks  = {public_subnet_cidr_blocks}
+  private_subnet_cidr_blocks = {private_subnet_cidr_blocks}
+"""
 
     return f"""        
 module "spacelift" {{
@@ -167,11 +187,7 @@ module "spacelift" {{
   kms_arn                       = aws_kms_key.master.arn
   kms_master_key_multi_regional = false
   kms_jwt_key_multi_regional    = false
- 
-  vpc_cidr_block             = "{context.vpc_cidr_block}"
-  public_subnet_cidr_blocks  = {public_subnet_cidr_blocks}
-  private_subnet_cidr_blocks = {private_subnet_cidr_blocks}
-        
+{vpc_config}        
   number_of_images_to_retain   = 10
   backend_ecr_repository_name  = "spacelift"
   launcher_ecr_repository_name = "spacelift-launcher"
@@ -201,6 +217,27 @@ module "spacelift" {{
 
 
 def create_spacelift_services_module(context: MigrationContext) -> str:
+    if context.uses_custom_vpc:
+        vpc_config = """#
+#  vpc_id                      = "<TODO: since you use a custom VPC, you'll need to set this manually>"
+#  ecs_subnets                 = ["<TODO: since you use a custom VPC, you'll need to set this manually. these should be private subnets>"]
+#  server_lb_subnets           = ["<TODO: since you use a custom VPC, you'll need to set this manually. these should be public subnets>"]
+#  server_security_group_id    = "<TODO: since you use a custom VPC, you'll need to set this manually>"
+#  drain_security_group_id     = "<TODO: since you use a custom VPC, you'll need to set this manually>"
+#  scheduler_security_group_id = "<TODO: since you use a custom VPC, you'll need to set this manually>"
+"""
+    else:
+        vpc_config = """#
+#  vpc_id      = module.spacelift.vpc_id
+#  ecs_subnets = module.spacelift.private_subnet_ids
+#  
+#  server_lb_subnets           = module.spacelift.public_subnet_ids
+#  server_security_group_id    = module.spacelift.server_security_group_id
+#  
+#  drain_security_group_id     = module.spacelift.drain_security_group_id
+#  scheduler_security_group_id = module.spacelift.scheduler_security_group_id
+"""
+
     return f"""
 # Uncomment after the above module applied successfully
 #module "spacelift_services" {{
@@ -294,16 +331,8 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #      "max-buffer-size": "25m"
 #    }}
 #  }}
-#  
-#  vpc_id      = module.spacelift.vpc_id
-#  ecs_subnets = module.spacelift.private_subnet_ids
-#  
-#  server_lb_subnets           = module.spacelift.public_subnet_ids
-#  server_security_group_id    = module.spacelift.server_security_group_id
+{vpc_config}
 #  server_lb_certificate_arn   = "{context.certificate_arn}"
-#  
-#  drain_security_group_id     = module.spacelift.drain_security_group_id
-#  scheduler_security_group_id = module.spacelift.scheduler_security_group_id
 #  
 #  mqtt_broker_type = "iotcore"
 #  

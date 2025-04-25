@@ -9,9 +9,10 @@ This migration tool analyzes your existing Spacelift V2 infrastructure deployed 
 Key features:
 - Scans and imports existing AWS resources (VPC, EC2, ECR, RDS, S3, KMS, IoT, SQS, etc.)
 - Generates all necessary Terraform files
-- Creates a script to handle a small infrastructural difference between V2 and V3 (NAT gateway refactoring)
+- Creates a script to handle a small infrastructural difference between V2 and V3 (Internet gateway refactoring)
 - Creates a script to tear down the old CloudFormation stacks with retaining resources
 - Enables zero-downtime migration (flipping the CNAME record to the new load balancer)
+- Supports custom VPC configurations (using existing VPC resources instead of creating new ones)
 
 ## 📦 Requirements
 
@@ -19,7 +20,7 @@ Key features:
 - Python 3.8+
 - AWS credentials with appropriate permissions
   - read access for the Python script (`main.py`) that scans the existing resources
-  - administrator access for running the `nat_gateway_refactor.py` script
+  - administrator access for running the `internet_gateway_refactor.py` script
   - administrator access when applying the generated Terraform code
   - administrator access when running the `delete_cf_stacks.py` cleanup script
 - A few pip packages (see [requirements.txt](./requirements.txt))
@@ -71,23 +72,42 @@ The script will:
 2. Get the unique suffix from SSM Parameter Store (from `/spacelift/random-suffix`)
 3. Get the certificate ARN from the existing load balancer
 4. Generate Terraform files
-5. Create 2 scripts: NAT gateway refactoring, and the CloudFormation deletion script
+5. Create 2 scripts: Internet gateway refactoring, and the CloudFormation deletion script
 
 ### Step 2: Apply the Generated Terraform Code
 
 Navigate to the output directory and follow these steps:
 
-1. Prepare the environment:
-   ```bash
-   python <output-folder>/nat_gateway_refactor.py [--profile AWS_PROFILE (optional)]
-   ```
+1. ❗️ You only need to do this step if you don't use a custom VPC, but the one packaged with Self-Hosted. This isn't a really functional change, but a small simplification we did for SelfHosted V3. Nothing really happens if you don't do it for your custom VPC.
    This script adjusts a small infrastructural difference between V2 and V3: consolidating multiple internet gateways into one shared gateway for all public subnets. Since the commands in the scripts are executed in an instant, the existing application should not be affected - at maximum having a one-second blip for outbound traffic.
 
    > The reason this step is a separate script instead of being part of the Terraform code is that Terraform has troubles properly ordering the removal and additions of internet gateway subnet associations, and AWS is very picky about the order of these operations.
 
+   Old infrastructure (SelfHosted V2):
+   ```mermaid
+   graph TD;
+      A("PublicSubnet1")-->B("InternetGateway1");
+      C("PublicSubnet2")-->D("InternetGateway3");
+      E("PublicSubnet3")-->F("InternetGateway3");
+   ```
+   New infrastructure (SelfHosted V3):
+   ```mermaid
+   graph TD;
+      A("PublicSubnet1")-->B("InternetGateway1");
+      C("PublicSubnet2")-->B;
+      E("PublicSubnet3")-->B;
+   ```
+   Run the internet gateway refactoring script by:
+   ```bash
+   python <output-folder>/internet_gateway_refactor.py [--profile AWS_PROFILE (optional)]
+   ```
+
 2. Configure the variables in `main.tf`:
    - Set `local.license_token` with your Spacelift license token
    - Set `local.spacelift_version` to the appropriate Docker tag uploaded to the ECR repositories
+   - If you're using a custom VPC, you'll need to provide values for the following `<TODO>` placeholders as well:
+     - In the `main.tf` / `spacelift` module: `rds_subnet_ids` and `rds_security_group_ids`
+     - In the `main.tf` / `spacelift_services` module: `vpc_id`, `ecs_subnets`, `server_lb_subnets`, `server_security_group_id`, `drain_security_group_id`, `scheduler_security_group_id`
   
 3. (Optional) Backend and resource tagging:
    - You could optionally set up [a remote backend](https://developer.hashicorp.com/terraform/language/backend) for Terraform state management in `main.tf`. The generated code uses a local backend by default, but you can change it to use S3 or any other supported backend.
@@ -111,7 +131,7 @@ Navigate to the output directory and follow these steps:
    ```
 
    The plan should include:
-   - 100+ resource imports
+   - 100+ resource imports (a bit less for custom VPC users)
    - ECR lifecycle policy replacements
    - A global RDS cluster creation (for high availability)
    - Various in-place changes (mostly tag-related)
@@ -122,7 +142,7 @@ Navigate to the output directory and follow these steps:
    - `created` resources
    - `destroy` operations
    
-   Pay extra attention `replaced` and `destroy` operations, as they may indicate potential downtime or data loss. **Remember that you can always adjust the generated code, as it serves as a starting point**.
+   Keep an eye on any `replaced` or `destroy` actions - they might cause downtime or wipe out data. **The generated code isn’t set in stone, so feel free to tweak it**. Just be especially careful with the persistence layer, like RDS and S3 - if those get destroyed, your data’s gone for good. That said, you’re safe with S3 since buckets can’t be deleted if they still have objects in them. Plus, deletion protection is turned on by default for the RDS cluster, which helps prevent accidental data loss as well.
 
 6. Apply the changes:
    ```bash
@@ -155,8 +175,9 @@ Navigate to the output directory and follow these steps:
 10. Redirect traffic:
    - Update your `CNAME` record to point to the new load balancer DNS name (available as an output)
    - To make sure the traffic is properly routed, you can scale down the old ECS cluster's `server` service to 0 tasks
+   - If you confirmed that the new `drain` and `scheduler` services are up and running (the services are stable, the logs look good), scale down the the old `drain` and `scheduler` services as well
 
-   In case you're experiencing issues, you can just revert the DNS change and scale up the old ECS cluster's `server` service.
+   In case you're experiencing issues, you can just revert the DNS change and scale up the old ECS cluster's services.
 
 11.  Clean up obsolete resources:
 
@@ -166,12 +187,15 @@ Navigate to the output directory and follow these steps:
       ```bash
       python <output-folder>/delete_cf_stacks.py --region AWS_REGION [--profile AWS_PROFILE (optional)]
       ```
+   - The script will delete all Cloudformation stacks, but retain those resources that are part of the V3 infrastructure and part of the Terraform code.
+     - It'll delete the entirety of the old ECS cluster, including the load balancer and all the services.
+     - Note that it'll delete the monitoring stack as well. The CloudWatch dashboard this stack created will be partially useless since the underlying ECS cluster and load balancer is getting deleted anyway. If you'd like to keep it, add the logical IDs of the resources next to the `spacelift-monitoring` part of the script in the `delete_stacks` method. The logical IDs can be found in the `spacelift-monitoring` stack's **Resources** tab in the AWS console, or by running `aws cloudformation describe-stack-resources --stack-name spacelift-monitoring --query 'StackResources[*].LogicalResourceId' --region <aws-region>` command.
    - If you want to retain more resources than the Terraform code does, feel free to `import` those and adjust the `delete_cf_stacks.py` script accordingly.
 
-12. (Optional) Reorganize Terraform code as needed:
+1.  (Optional) Reorganize Terraform code as needed:
     - The terraform `move` block can be useful for restructuring
   
-13. (Optional) The following resources are retained by the Cloudformation stacks but **not** managed by the generated Terraform code:
+2.  (Optional) The following resources are retained by the Cloudformation stacks but **not** managed by the generated Terraform code:
   - `/spacelift/random-suffix` SSM parameter - this isn't used in V3 anymore. You can delete it.
   - `/spacelift/install-version` SSM parameter - this isn't used in V3 anymore. You can delete it.
   - `BootstrapBucket` S3 bucket - this isn't used in V3 anymore. *Cloudformation can't delete the bucket as it's not empty, so you'll need to purge the bucket, then remove it.*

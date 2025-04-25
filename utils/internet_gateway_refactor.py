@@ -12,7 +12,7 @@ def create_session(region: str, profile: Optional[str] = None) -> boto3.Session:
     return boto3.Session(**boto_args)
 
 
-def refactor_nat_gateways(profile: Optional[str] = None) -> None:
+def refactor_internet_gateways(profile: Optional[str] = None) -> None:
     # Configuration (will be injected during generation)
     region = "{REGION}"
     gateway1_route_table_id = "{GATEWAY1_ROUTE_TABLE_ID}"
@@ -21,7 +21,7 @@ def refactor_nat_gateways(profile: Optional[str] = None) -> None:
     gateway2_association_id = "{GATEWAY2_ASSOCIATION_ID}"
     gateway3_association_id = "{GATEWAY3_ASSOCIATION_ID}"
 
-    print("Refactoring NAT Gateway configuration...")
+    print("Refactoring Internet Gateway configuration...")
     print("\nSummary of what this script will do:")
     print("1. Disassociate existing route tables if provided")
     print("2. Associate subnets 2 and 3 with the main route table (gateway1)")
@@ -89,17 +89,17 @@ def refactor_nat_gateways(profile: Optional[str] = None) -> None:
             RouteTableId=gateway1_route_table_id, SubnetId=public_subnet_id_3
         )
         print(f"Association successful: {response['AssociationId']}")
-        print("\nNAT Gateway refactoring completed successfully.")
+        print("\nInternet Gateway refactoring completed successfully.")
     except ClientError as e:
-        print(f"Error during NAT Gateway refactoring: {e}")
+        print(f"Error during Internet Gateway refactoring: {e}")
         sys.exit(1)
 
 
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Refactor NAT Gateway configuration")
+    parser = argparse.ArgumentParser(description="Refactor Internet Gateway configuration")
     parser.add_argument("--profile", type=str, help="AWS profile name to use")
     args = parser.parse_args()
 
-    refactor_nat_gateways(profile=args.profile)
+    refactor_internet_gateways(profile=args.profile)

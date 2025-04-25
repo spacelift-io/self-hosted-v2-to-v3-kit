@@ -1,7 +1,7 @@
 """
 This script requires some explanation. Deleting Cloudformation stacks with retaining resources is painful.
 
-You can only retain resources if the stack state is DELETE_FAILED (!!!). Otherwise, CF doesn't let you specify retained resources.
+You can only retain resources if the stack state is DELETE_FAILED (!). Otherwise, CF doesn't let you specify retained resources.
 The workaround looks like that:
 - You create an IAM role with zero permissions, that doesn't have permissions to delete anything.
 - You try to delete the stack with that role
@@ -100,7 +100,9 @@ def create_temp_iam_roles(session: boto3.Session) -> tuple:
         ],
     }
 
-    bad_role_arn = create_temp_iam_role(session, temp_role_bad_name, policy_document_for_bad_role, False)
+    bad_role_arn = create_temp_iam_role(
+        session, temp_role_bad_name, policy_document_for_bad_role, False
+    )
     admin_role_arn = create_temp_iam_role(session, temp_role_name_admin, None, is_admin=True)
 
     print(f"  > IAM role permissions need a while to propagate. Waiting 15 seconds...")
@@ -140,7 +142,9 @@ def delete_stack(
             cf_client.delete_stack(StackName=stack_name, RoleARN=admin_role_arn)
         except Exception as e:
             if "is invalid or cannot be assumed" in str(e):
-                print("  > The IAM role did not propagate yet. Wait a minute, then re-run the script.")
+                print(
+                    "  > The IAM role did not propagate yet. Wait a minute, then re-run the script."
+                )
                 sys.exit(0)
             print(f"Error deleting stack with admin role: {e}")
     else:
@@ -188,7 +192,9 @@ def delete_stack(
                     pass
             except Exception as e:
                 if "is invalid or cannot be assumed" in str(e):
-                    print("  > The IAM role did not propagate yet. Wait a minute, then re-run the script.")
+                    print(
+                        "  > The IAM role did not propagate yet. Wait a minute, then re-run the script."
+                    )
                     sys.exit(0)
 
                 print(f"Error in first delete attempt: {e}")
@@ -286,7 +292,10 @@ def delete_stacks(region: str, profile: Optional[str] = None) -> None:
 
     # Define stacks and resources to retain
     stacks = [
-        {"name": "spacelift-monitoring", "retain": []},
+        {
+            "name": "spacelift-monitoring",
+            "retain": [],  # <-- Add Logical IDs here if you'd like to retain them
+        },
         {"name": "spacelift-services", "retain": []},
         {"name": "spacelift-services-infra", "retain": []},
         {"name": "spacelift-services-loadbalancer", "retain": []},
@@ -312,7 +321,7 @@ def delete_stacks(region: str, profile: Optional[str] = None) -> None:
                 "SAMLCredentialsSecret",
                 "SlackCredentialsSecret",
                 "WebhooksQueue",
-                "XrayECRRepository",  # Can't be deleted as it's not empty
+                "XrayECRRepository",  # Can't be deleted as it's not empty. Needs to be deleted manually.
             ],
         },
         {
@@ -323,7 +332,7 @@ def delete_stacks(region: str, profile: Optional[str] = None) -> None:
         {
             "name": "spacelift-infra-vpc-config",
             "retain": [
-                "BastionSecurityGroupDatabaseEgressRule",  # In case the user uses a bastion host. Can be deleted otherwise.
+                "BastionSecurityGroupDatabaseEgressRule",  # In case the user uses a bastion host, let's keep it. Can be deleted otherwise.
                 "InternetGateway",
                 "InternetGatewayRouteTable1",
                 "InternetGatewayRouteTable1OutboundTrafficRoute",
@@ -352,10 +361,10 @@ def delete_stacks(region: str, profile: Optional[str] = None) -> None:
         {
             "name": "spacelift-infra-vpc",
             "retain": [
-                "BastionSecurityGroup",  # Can't be deleted since the database security group references it
+                "BastionSecurityGroup",  # Can't be deleted since the database security group references it. Needs to be deleted manually.
                 "DatabaseSecurityGroup",
                 "DrainSecurityGroup",
-                "InstallationTaskSecurityGroup",  # Can't be deleted since the database security group references it
+                "InstallationTaskSecurityGroup",  # Can't be deleted since the database security group references it. Needs to be deleted manually.
                 "LoadBalancerSecurityGroup",
                 "PrivateSubnet1",
                 "PrivateSubnet2",
@@ -369,8 +378,8 @@ def delete_stacks(region: str, profile: Optional[str] = None) -> None:
         {
             "name": "spacelift-infra-s3",
             "retain": [
-                "AccessLogsBucket",  # Can't be deleted as it's not empty
-                "BucketLogsBucket",  # Can't be deleted as it's not empty
+                "AccessLogsBucket",  # Can't be deleted as it's not empty. Needs to be deleted manually.
+                "BucketLogsBucket",  # Can't be deleted as it's not empty. Needs to be deleted manually.
                 "DeliveriesBucket",
                 "DownloadsBucket",
                 "LargeQueueMessagesBucket",
@@ -396,7 +405,9 @@ def delete_stacks(region: str, profile: Optional[str] = None) -> None:
         },
         {
             "name": "spacelift-bootstrap",
-            "retain": ["BootstrapBucket"],  # Can't be deleted as it's not empty
+            "retain": [
+                "BootstrapBucket"  # Can't be deleted as it's not empty. Needs to be deleted manually.
+            ],
         },
     ]
 
