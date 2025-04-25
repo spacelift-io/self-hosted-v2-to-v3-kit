@@ -21,14 +21,13 @@ class MigrationContext:
         self.certificate_arn: str | None = None
 
         # VPC and network configuration
+        self.uses_custom_vpc: bool = False
         self.vpc_cidr_block: str | None = None
         self.private_subnet_cidr_blocks: list[str] = ["", "", ""]
         self.public_subnet_cidr_blocks: list[str] = ["", "", ""]
         self.public_subnet_id_1: str | None = None
         self.public_subnet_id_2: str | None = None
         self.public_subnet_id_3: str | None = None
-
-        # Route tables and associations
         self.gateway1_route_table_id: str | None = None
         self.gateway2_association_id: str | None = None
         self.gateway3_association_id: str | None = None

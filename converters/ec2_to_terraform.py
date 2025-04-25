@@ -107,6 +107,9 @@ class EC2Terraformer(Terraformer):
         self.database_server_ingress_rule_resource_name = "module.spacelift.module.network[0].aws_vpc_security_group_ingress_rule.database_server_ingress_rule[0]"
         self.database_scheduler_ingress_rule_resource_name = "module.spacelift.module.network[0].aws_vpc_security_group_ingress_rule.database_scheduler_ingress_rule[0]"
 
+    def set_uses_custom_vpc(self, uses_custom_vpc: bool):
+        self.migration_context.uses_custom_vpc = uses_custom_vpc
+
     def vpc_to_terraform(self, vpc_id: str, cidr_block: str, tags: List[Dict]):
         for tag in tags:
             if tag["Key"] == "aws:cloudformation:logical-id" and tag["Value"] == "VPC":

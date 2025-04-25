@@ -10,13 +10,30 @@ def scan_ec2_resources(session: boto3.Session, terraformer: EC2Terraformer) -> N
     ec2 = session.client("ec2")
     cloudformation = session.client("cloudformation")
 
-    _scan_vpcs(ec2, cloudformation, terraformer)
-    _scan_subnets(ec2, cloudformation, terraformer)
-    _scan_internet_gateways(cloudformation, terraformer)
-    _scan_route_tables(ec2, cloudformation, terraformer)
-    _scan_elastic_ips(ec2, cloudformation, terraformer)
-    _scan_nat_gateways(ec2, cloudformation, terraformer)
-    _scan_security_groups(ec2, cloudformation, terraformer)
+    has_custom_vpc = _has_custom_vpc(cloudformation)
+    terraformer.set_uses_custom_vpc(has_custom_vpc)
+
+    if not has_custom_vpc:
+        _scan_vpcs(ec2, cloudformation, terraformer)
+        _scan_subnets(ec2, cloudformation, terraformer)
+        _scan_internet_gateways(cloudformation, terraformer)
+        _scan_route_tables(ec2, cloudformation, terraformer)
+        _scan_elastic_ips(ec2, cloudformation, terraformer)
+        _scan_nat_gateways(ec2, cloudformation, terraformer)
+        _scan_security_groups(ec2, cloudformation, terraformer)
+
+
+def _has_custom_vpc(cloudformation) -> bool:
+    stacks = cloudformation.list_stacks()["StackSummaries"]
+    active_stacks = [stack for stack in stacks if stack["StackStatus"] != "DELETE_COMPLETE"]
+
+    for stack in active_stacks:
+        if stack["StackName"] == "spacelift-infra-vpc":
+            return False
+        if stack["StackName"] == "spacelift-infra-vpc-config":
+            return False
+
+    return True
 
 
 def _scan_vpcs(ec2, cloudformation, terraformer: EC2Terraformer) -> None:
