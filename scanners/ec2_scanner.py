@@ -10,10 +10,7 @@ def scan_ec2_resources(session: boto3.Session, terraformer: EC2Terraformer) -> N
     ec2 = session.client("ec2")
     cloudformation = session.client("cloudformation")
 
-    has_custom_vpc = _has_custom_vpc(cloudformation)
-    terraformer.set_uses_custom_vpc(has_custom_vpc)
-
-    if not has_custom_vpc:
+    if not terraformer.uses_custom_vpc():
         _scan_vpcs(ec2, cloudformation, terraformer)
         _scan_subnets(ec2, cloudformation, terraformer)
         _scan_internet_gateways(cloudformation, terraformer)
@@ -21,19 +18,6 @@ def scan_ec2_resources(session: boto3.Session, terraformer: EC2Terraformer) -> N
         _scan_elastic_ips(ec2, cloudformation, terraformer)
         _scan_nat_gateways(ec2, cloudformation, terraformer)
         _scan_security_groups(ec2, cloudformation, terraformer)
-
-
-def _has_custom_vpc(cloudformation) -> bool:
-    stacks = cloudformation.list_stacks()["StackSummaries"]
-    active_stacks = [stack for stack in stacks if stack["StackStatus"] != "DELETE_COMPLETE"]
-
-    for stack in active_stacks:
-        if stack["StackName"] == "spacelift-infra-vpc":
-            return False
-        if stack["StackName"] == "spacelift-infra-vpc-config":
-            return False
-
-    return True
 
 
 def _scan_vpcs(ec2, cloudformation, terraformer: EC2Terraformer) -> None:
@@ -86,26 +70,26 @@ def _scan_route_tables(ec2, cloudformation, terraformer: EC2Terraformer) -> None
     table_resp = ec2.describe_route_tables(RouteTableIds=route_table_ids)
 
     igw_route_table_1 = _get_route_table_by_name(
-        table_resp["RouteTables"], "Spacelift InternetGatewayRouteTable1"
+        table_resp["RouteTables"], "InternetGatewayRouteTable1"
     )
     igw_route_table_2 = _get_route_table_by_name(
-        table_resp["RouteTables"], "Spacelift InternetGatewayRouteTable2"
+        table_resp["RouteTables"], "InternetGatewayRouteTable2"
     )
     igw_route_table_3 = _get_route_table_by_name(
-        table_resp["RouteTables"], "Spacelift InternetGatewayRouteTable3"
+        table_resp["RouteTables"], "InternetGatewayRouteTable3"
     )
     terraformer.route_table_to_terraform(igw_route_table_1, "Spacelift InternetGatewayRouteTable1")
     terraformer.route_table_to_terraform(igw_route_table_2, "Spacelift InternetGatewayRouteTable2")
     terraformer.route_table_to_terraform(igw_route_table_3, "Spacelift InternetGatewayRouteTable3")
 
     nat_gateway_route_table_1 = _get_route_table_by_name(
-        table_resp["RouteTables"], "Spacelift NATGatewayRouteTable1"
+        table_resp["RouteTables"], "NATGatewayRouteTable1"
     )
     nat_gateway_route_table_2 = _get_route_table_by_name(
-        table_resp["RouteTables"], "Spacelift NATGatewayRouteTable2"
+        table_resp["RouteTables"], "NATGatewayRouteTable2"
     )
     nat_gateway_route_table_3 = _get_route_table_by_name(
-        table_resp["RouteTables"], "Spacelift NATGatewayRouteTable3"
+        table_resp["RouteTables"], "NATGatewayRouteTable3"
     )
     terraformer.route_table_to_terraform(
         nat_gateway_route_table_1, "Spacelift NATGatewayRouteTable1"
@@ -122,7 +106,7 @@ def _get_route_table_by_name(route_tables: List[Dict], name: str) -> Dict:
     for route_table in route_tables:
         tags = route_table.get("Tags", [])
 
-        if any(tag["Key"] == "Name" and tag["Value"] == name for tag in tags):
+        if any(tag["Key"] == "aws:cloudformation:logical-id" and tag["Value"] == name for tag in tags):
             return route_table
 
     raise ValueError(f"Route table with name {name} not found.")

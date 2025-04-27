@@ -17,11 +17,7 @@ from converters.sqs_to_terraform import SQSTerraformer
 from scanners.iot_scanner import scan_iot_resources
 from scanners.sqs_scanner import scan_sqs_resources
 from utils.cli import parse_args
-from utils.aws import (
-    create_session,
-    get_ssm_parameter,
-    get_load_balancer_certificate_arn,
-)
+from utils.aws import create_session, get_ssm_parameter
 from scanners.s3_scanner import scan_s3_resources
 from scanners.kms_scanner import scan_kms_resources
 from scanners.ec2_scanner import scan_ec2_resources
@@ -29,11 +25,22 @@ from scanners.ecr_scanner import scan_ecr_resources
 from scanners.rds_scanner import scan_rds_resources
 from scanners.sm_scanner import scan_sm_resources
 from utils.terraform_generator import generate_tf_files
+from utils.config import load_app_config
 
 
 def initialize_output_dir(output_dir: str) -> str:
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
+
+    existing_files = list(output_path.iterdir())
+    if existing_files:
+        print(
+            f"\n    !!! Warning: Output directory '{output_dir}' is not empty. You will lose all {len(existing_files)} file(s) if you continue.\n"
+        )
+        confirmation = input("Continue? (y/n): ")
+        if confirmation.lower() != "y":
+            print("Operation cancelled.")
+            sys.exit(0)
 
     f = output_path / "imports.tf"
     f.unlink(missing_ok=True)
@@ -53,20 +60,6 @@ def initialize_terraformers(terraform_file: str, context: MigrationContext) -> t
         IOTTerraformer(terraform_file, context),
         SQSTerraformer(terraform_file, context),
     )
-
-
-def get_certificate_arn(session: boto3.Session) -> str:
-    try:
-        cert_arn = get_load_balancer_certificate_arn(session, "spacelift-server")
-        if cert_arn:
-            return cert_arn
-        else:
-            raise ValueError(
-                "No HTTPS listener (port 443) found on the spacelift-server load balancer"
-            )
-    except Exception as e:
-        print(f"Error getting certificate ARN: {e}")
-        raise ValueError(f"Failed to get certificate ARN from load balancer: {e}")
 
 
 def check_version_requirement(session: boto3.Session) -> None:
@@ -111,16 +104,17 @@ def get_unique_suffix(session: boto3.Session) -> str:
         )
 
 
-def main(region: str, profile: Optional[str], output_dir: str) -> None:
-    session = create_session(region, profile)
+def main(config_path: str, profile: Optional[str], output_dir: str) -> None:
+    config = load_app_config(config_path)
+
+    session = create_session(config.aws_region, profile)
 
     check_version_requirement(session)
     unique_suffix = get_unique_suffix(session)
 
     terraform_file = initialize_output_dir(output_dir)
     migration_context = MigrationContext()
-    migration_context.region = region
-    migration_context.certificate_arn = get_certificate_arn(session)
+    migration_context.config = config
 
     (
         ec2_terraformer,
@@ -154,4 +148,4 @@ def main(region: str, profile: Optional[str], output_dir: str) -> None:
 
 if __name__ == "__main__":
     args = parse_args()
-    main(region=args.region, profile=args.profile, output_dir=args.output)
+    main(config_path=args.config, profile=args.profile, output_dir=args.output)

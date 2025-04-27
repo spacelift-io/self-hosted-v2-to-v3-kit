@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - String formatting: Prefer f-strings for string formatting
 - Class structure: Follow OOP principles, use inheritance as in terraformer.py
 - AWS resources: Follow the pattern in converters/* for adding new AWS resource support
-- Documentation: Do not add docstrings, and don't add comments to the code unless the complex logic justifies it.
+- Comments and docstring: do not add docstrings or comments to the code unless the complex logic justifies it. 
 
 ## Miscellaneous
 - Always disregard virtualenv folders, such as `env/` or `.venv/`, as well as any other `.gitignore`-ed files or folders.

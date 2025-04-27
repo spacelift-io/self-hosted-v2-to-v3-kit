@@ -51,6 +51,19 @@ pip install -r requirements-dev.txt
 
 ## 🛠️ Usage
 
+### Notes for two-regions (disaster recovery) setups
+
+When you have a [bi-regional setup with a primary and a secondary region](https://docs.spacelift.io/self-hosted/latest/product/administration/disaster-recovery.html), you'll need to execute everything twice. First for the primary region, then for the secondary one. Don't forget to have the outputs in different folders, eg.:
+
+```bash
+python main.py --config "<sh-v2-primary-config-file-path.json>" --output dist-eu-west-1-primary
+python main.py --config "<sh-v2-secondary-config-file-path.json>" --output dist-eu-west-2-secondary
+```
+
+As per the [official documentation](https://docs.spacelift.io/self-hosted/latest/product/administration/disaster-recovery.html), with such a setup, you already handle your RDS setup outside of the Cloudformation realm, and you just pass in a SecretsManager Secret holding the connection string and a KMS ARN encrypting the Secret (specifically `database.connection_string_ssm_arn` and `database.connection_string_ssm_kms_arn` config options).
+
+This migration tool has the same approach: it'll just inject your custom secret into the app, but will leave you to manage your database setup yourself. However, you are welcome to define those RDS resources and import them to the project.
+
 ### Step 1: Generate Terraform project
 
 #### Prerequisites
@@ -60,7 +73,7 @@ pip install -r requirements-dev.txt
 Run the main script with your AWS region:
 
 ```bash
-python main.py --region <aws-region>
+python main.py --config "<sh-v2-config-file-path.json>"
 ```
 
 Additional arguments:
@@ -192,10 +205,11 @@ Navigate to the output directory and follow these steps:
      - Note that it'll delete the monitoring stack as well. The CloudWatch dashboard this stack created will be partially useless since the underlying ECS cluster and load balancer is getting deleted anyway. If you'd like to keep it, add the logical IDs of the resources next to the `spacelift-monitoring` part of the script in the `delete_stacks` method. The logical IDs can be found in the `spacelift-monitoring` stack's **Resources** tab in the AWS console, or by running `aws cloudformation describe-stack-resources --stack-name spacelift-monitoring --query 'StackResources[*].LogicalResourceId' --region <aws-region>` command.
    - If you want to retain more resources than the Terraform code does, feel free to `import` those and adjust the `delete_cf_stacks.py` script accordingly.
 
-1.  (Optional) Reorganize Terraform code as needed:
-    - The terraform `move` block can be useful for restructuring
+12.  (Optional) Reorganize Terraform code as needed:
+
+- The Terraform [`moved` block](https://developer.hashicorp.com/terraform/tutorials/configuration-language/move-config) can be useful for restructuring
   
-2.  (Optional) The following resources are retained by the Cloudformation stacks but **not** managed by the generated Terraform code:
+13.  (Optional) The following resources are retained by the Cloudformation stacks but **not** managed by the generated Terraform code:
   - `/spacelift/random-suffix` SSM parameter - this isn't used in V3 anymore. You can delete it.
   - `/spacelift/install-version` SSM parameter - this isn't used in V3 anymore. You can delete it.
   - `BootstrapBucket` S3 bucket - this isn't used in V3 anymore. *Cloudformation can't delete the bucket as it's not empty, so you'll need to purge the bucket, then remove it.*

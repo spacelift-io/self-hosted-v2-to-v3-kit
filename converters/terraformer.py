@@ -14,3 +14,9 @@ class Terraformer(ABC):
             f.write(f"  to = {resource_name}\n")
             f.write(f'  id = "{to}"\n')
             f.write("}\n\n")
+
+    def is_primary_region(self) -> bool:
+        return self.migration_context.config.is_primary_region()
+
+    def uses_custom_database_connection_string(self) -> bool:
+        return self.migration_context.config.uses_custom_database_connection_string()

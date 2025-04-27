@@ -21,7 +21,7 @@ def generate_tf_files(
         str(output_path / "delete_cf_stacks.py"),
     )
 
-    if not context.uses_custom_vpc:
+    if not context.config.vpc_config.use_custom_vpc:
         shutil.copyfile(
             str(Path(__file__).parent / "internet_gateway_refactor.py"),
             str(output_path / "internet_gateway_refactor.py"),
@@ -54,6 +54,13 @@ def generate_tf_files(
     with open(sqs_file, "a") as f:
         write_sqs_terraform_content(f)
 
+    if context.s3_replication_role_name and context.s3_replication_policy_name:
+        s3_replication_file = output_path / "s3_replication.tf"
+        s3_replication_file.unlink(missing_ok=True)
+        s3_replication_file.touch()
+        with open(s3_replication_file, "a") as f:
+            write_s3_replication_terraform_content(f, context)
+
     iot_file = output_path / "iot.tf"
     iot_file.unlink(missing_ok=True)
     iot_file.touch()
@@ -84,7 +91,7 @@ def replace_variables_in_gateway_refactor_file(
 
     # Replace template placeholders with actual values
     script_content = template_content
-    script_content = script_content.replace("{REGION}", context.region)
+    script_content = script_content.replace("{REGION}", context.config.aws_region)
     script_content = script_content.replace(
         "{GATEWAY1_ROUTE_TABLE_ID}", context.gateway1_route_table_id
     )
@@ -105,7 +112,7 @@ def replace_variables_in_gateway_refactor_file(
 
 
 def create_terraform_provider_block(context: MigrationContext) -> str:
-    if context.uses_custom_vpc:
+    if context.config.vpc_config and context.config.vpc_config.use_custom_vpc:
         top_of_file_message = ""
     else:
         top_of_file_message = (
@@ -134,11 +141,11 @@ provider "aws" {{
 def create_locals_block(context: MigrationContext) -> str:
     return f"""
 locals {{
-  region            = "{context.region}"
+  region            = "{context.config.aws_region}"
   spacelift_version = "v3.0.0" # TODO: This is a tag of a Docker image uploaded to the "spacelift" and "spacelift-launcher" ECRs.
   website_domain    = "{context.cors_origin.replace('https://', '')}"
   website_endpoint  = "https://${{local.website_domain}}"
-  license_token     = "<TODO: you need to set this value>" # TODO: This value must be set to the license token you received from Spacelift.
+  license_token     = "<TODO: you need to set this value>" # This value must be set to the license token you received from Spacelift.
 }}
 """
 
@@ -147,12 +154,48 @@ def format_subnet_cidr_blocks(cidr_blocks: List[str]) -> str:
     return "[" + ", ".join(f'"{item}"' for item in cidr_blocks) + "]"
 
 
+def format_subnet_ids(subnet_ids_str: Optional[str]) -> str:
+    if not subnet_ids_str:
+        return '["<TODO: you need to set this value>"]'
+
+    subnet_ids = [s.strip() for s in subnet_ids_str.split(",")]
+    return "[" + ", ".join(f'"{subnet_id}"' for subnet_id in subnet_ids) + "]"
+
+
+def get_db_password_arn(context: MigrationContext) -> str:
+    if context.config.uses_custom_database_connection_string():
+        # Use the custom connection string ARN from config
+        return f'"{context.config.database.connection_string_ssm_arn}"'
+    else:
+        # Use the default created secret
+        return "aws_secretsmanager_secret.db_pw.arn"
+
+
 def create_spacelift_module(unique_suffix: str, context: MigrationContext) -> str:
-    if context.uses_custom_vpc:
-        vpc_config = """
+    if not context.config.uses_custom_database_connection_string():
+        rds_section = f"""
+  rds_engine_version              = "{context.rds_engine_version}"
+  rds_preferred_backup_window     = "{context.rds_preferred_backup_window}"
+  rds_regional_cluster_identifier = "spacelift"
+  rds_parameter_group_name        = "spacelift"
+  rds_subnet_group_name           = "spacelift"
+  rds_parameter_group_description = "Spacelift core product database"
+  rds_password_sm_arn             = {get_db_password_arn(context)}
+  rds_instance_configuration      = {{
+    "primary" = {{
+      instance_identifier = "{context.rds_instance_identifier}"
+      instance_class      = "{context.rds_instance_class}"
+    }}
+  }}
+""".rstrip()
+    else:
+        rds_section = "  create_database = false  # Note: RDS resources are untracked by Terraform. Feel free to import them."
+
+    if context.config.vpc_config and context.config.vpc_config.use_custom_vpc:
+        vpc_config = f"""
   create_vpc             = false
-  rds_subnet_ids         = ["<TODO: since you use a custom VPC, you'll need to set this manually. these should be private subnets>"]
-  rds_security_group_ids = ["<TODO: since you use a custom VPC, you'll need to set this manually>"]
+  rds_subnet_ids         = {format_subnet_ids(context.config.vpc_config.private_subnet_ids)}
+  rds_security_group_ids = ["{context.config.vpc_config.database_security_group_id}"]
 """
     else:
         public_subnet_cidr_blocks = format_subnet_cidr_blocks(context.public_subnet_cidr_blocks)
@@ -165,7 +208,7 @@ def create_spacelift_module(unique_suffix: str, context: MigrationContext) -> st
 
     return f"""        
 module "spacelift" {{
-  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=main"
+  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v1.3.0"
 
   region           = local.region
   website_endpoint = local.website_endpoint
@@ -199,32 +242,20 @@ module "spacelift" {{
     server    = "server_sg"
   }}
         
-  rds_engine_version              = "{context.rds_engine_version}"
-  rds_preferred_backup_window     = "{context.rds_preferred_backup_window}"
-  rds_regional_cluster_identifier = "spacelift"
-  rds_parameter_group_name        = "spacelift"
-  rds_subnet_group_name           = "spacelift"
-  rds_parameter_group_description = "Spacelift core product database"
-  rds_password_sm_arn             = aws_secretsmanager_secret.db_pw.arn
-  rds_instance_configuration      = {{
-    "primary" = {{
-      instance_identifier = "{context.rds_instance_identifier}"
-      instance_class      = "{context.rds_instance_class}"
-    }}
-  }}         
+{rds_section}        
 }}
 """
 
 
 def create_spacelift_services_module(context: MigrationContext) -> str:
-    if context.uses_custom_vpc:
-        vpc_config = """#
-#  vpc_id                      = "<TODO: since you use a custom VPC, you'll need to set this manually>"
-#  ecs_subnets                 = ["<TODO: since you use a custom VPC, you'll need to set this manually. these should be private subnets>"]
-#  server_lb_subnets           = ["<TODO: since you use a custom VPC, you'll need to set this manually. these should be public subnets>"]
-#  server_security_group_id    = "<TODO: since you use a custom VPC, you'll need to set this manually>"
-#  drain_security_group_id     = "<TODO: since you use a custom VPC, you'll need to set this manually>"
-#  scheduler_security_group_id = "<TODO: since you use a custom VPC, you'll need to set this manually>"
+    if context.config.vpc_config and context.config.vpc_config.use_custom_vpc:
+        vpc_config = f"""#
+#  vpc_id                      = "{context.config.vpc_config.vpc_id}"
+#  ecs_subnets                 = {format_subnet_ids(context.config.vpc_config.private_subnet_ids)}
+#  server_lb_subnets           = {format_subnet_ids(context.config.vpc_config.public_subnet_ids)}
+#  server_security_group_id    = "{context.config.vpc_config.server_security_group_id}"
+#  drain_security_group_id     = "{context.config.vpc_config.drain_security_group_id}"
+#  scheduler_security_group_id = "{context.config.vpc_config.scheduler_security_group_id}"
 """
     else:
         vpc_config = """#
@@ -237,11 +268,37 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #  drain_security_group_id     = module.spacelift.drain_security_group_id
 #  scheduler_security_group_id = module.spacelift.scheduler_security_group_id
 """
+    ecs_service_desired_count = ""
+    if not context.config.is_primary_region():
+        ecs_service_desired_count = """
+#  drain_desired_count = 0
+#  scheduler_desired_count = 0
+#  server_desired_count = 0
+        """.strip()
+
+    if context.config.uses_custom_database_connection_string():
+        db_secret = f"""
+#    {{
+#      name = "DATABASE_URL"
+#      valueFrom = "{context.config.database.connection_string_ssm_arn}:DATABASE_URL::"
+#    }}
+        """.strip()
+    else:
+        db_secret = """
+#    {
+#      name = "DATABASE_URL"
+#      valueFrom = "${module.spacelift.database_secret_arn}:DATABASE_URL::"
+#    },
+#    {
+#      name = "DATABASE_READ_ONLY_URL"
+#      valueFrom = "${module.spacelift.database_secret_arn}:DATABASE_READ_ONLY_URL::"
+#    }
+""".lstrip()
 
     return f"""
 # Uncomment after the above module applied successfully
 #module "spacelift_services" {{
-#  source = "github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted?ref=main"
+#  source = "github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted?ref=v1.1.0"
 #  
 #  region               = local.region
 #  unique_suffix        = module.spacelift.unique_suffix
@@ -251,11 +308,13 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #  license_token = local.license_token
 #  
 #  encryption_type        = "kms"
-#  kms_encryption_key_arn = aws_kms_key.encryption_primary.arn
+#  kms_encryption_key_arn = {"aws_kms_key.encryption_primary.arn" if context.config.is_primary_region() else "aws_kms_replica_key.encryption_replica_key.arn"}  
 #  kms_signing_key_arn    = aws_kms_key.jwt.arn
+{f'#  iot_endpoint = "{context.config.iot_broker_endpoint}"' if context.config.iot_broker_endpoint else ""}
 # 
+#  additional_env_vars         = [] # Fill this if you need to set any additional env vars, such as HTTP_PROXY/HTTPS_PROXY/NO_PROXY
 #  secrets_manager_secret_arns = [
-#    module.spacelift.database_secret_arn,
+{"#    module.spacelift.database_secret_arn," if not context.config.uses_custom_database_connection_string() else f'#    "{context.config.database.connection_string_ssm_arn}",'}
 #    aws_secretsmanager_secret.slack_credentials.arn,
 #    aws_secretsmanager_secret.additional_root_ca_certificates.arn,
 #    aws_secretsmanager_secret.saml_credentials.arn,
@@ -281,14 +340,7 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #      name = "SLACK_SECRET"
 #      valueFrom = "${{aws_secretsmanager_secret.slack_credentials.arn}}:SLACK_SECRET::"
 #    }},
-#    {{
-#      name = "DATABASE_URL"
-#      valueFrom = "${{module.spacelift.database_secret_arn}}:DATABASE_URL::"
-#    }},
-#    {{
-#      name = "DATABASE_READ_ONLY_URL"
-#      valueFrom = "${{module.spacelift.database_secret_arn}}:DATABASE_READ_ONLY_URL::"
-#    }}
+{db_secret}
 #  ]
 #  
 #  backend_image      = module.spacelift.ecr_backend_repository_url
@@ -331,8 +383,10 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #      "max-buffer-size": "25m"
 #    }}
 #  }}
+#
+{ecs_service_desired_count}
 {vpc_config}
-#  server_lb_certificate_arn   = "{context.certificate_arn}"
+#  server_lb_certificate_arn   = "{context.config.load_balancer.certificate_arn}"
 #  
 #  mqtt_broker_type = "iotcore"
 #  
@@ -376,14 +430,26 @@ data "aws_caller_identity" "current" {}
 
 
 def write_secret_resources(f, context: MigrationContext) -> None:
-    f.write(
-        """
+    has_custom_connection_string = (
+        context.config
+        and context.config.database
+        and context.config.database.connection_string_ssm_arn
+        and len(context.config.database.connection_string_ssm_arn) > 0
+    )
+
+    if not has_custom_connection_string:
+        f.write(
+            """
 resource "aws_secretsmanager_secret" "db_pw" {
   name        = "spacelift/database"
   description = "Connection string for the Spacelift database"
   kms_key_id  = aws_kms_key.master.arn
 }
+""".lstrip()
+        )
 
+    f.write(
+        """
 resource "aws_secretsmanager_secret" "slack_credentials" {
   name        = "spacelift/slack-application"
   description = "Contains the Spacelift Slack application configuration"
@@ -412,6 +478,51 @@ resource "aws_secretsmanager_secret" "saml_credentials" {
 
 
 def write_kms_terraform_content(f, context: MigrationContext) -> None:
+    if (
+        context.config.disaster_recovery
+        and context.config.disaster_recovery.encryption_primary_key_arn
+    ):
+        primary_key_resource = f"""
+resource "aws_kms_replica_key" "encryption_replica_key" {{
+  primary_key_arn = "{context.config.disaster_recovery.encryption_primary_key_arn}"
+  description     = "Spacelift in-app encryption primary key. Used to encrypt user data stored in the database like VCS tokens."
+
+  policy = jsonencode({{
+    Version = "2012-10-17",
+    Statement = [
+      {{
+        Effect = "Allow",
+        Action = "kms:*",
+        Resource = "*",
+        Principal = {{
+           AWS = "arn:${{data.aws_partition.current.partition}}:iam::${{data.aws_caller_identity.current.account_id}}:root"
+        }}
+      }}
+    ]
+  }})
+}}
+            """.lstrip()
+    else:
+        primary_key_resource = """
+resource "aws_kms_key" "encryption_primary" {
+  description         = "Spacelift in-app encryption primary key. Used to encrypt user data stored in the database like VCS tokens."
+  enable_key_rotation = true
+  multi_region        = true
+
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      }
+    ]
+  })
+}
+            """.lstrip()
+
     f.write(
         f"""
 resource "aws_kms_key" "master" {{
@@ -474,23 +585,7 @@ resource "aws_kms_key" "jwt" {{
   }})
 }}
 
-resource "aws_kms_key" "encryption_primary" {{
-  description         = "Spacelift in-app encryption primary key. Used to encrypt user data stored in the database like VCS tokens."
-  enable_key_rotation = true
-  multi_region        = true
-
-  policy = jsonencode({{
-    Version   = "2012-10-17"
-    Statement = [
-      {{
-        Effect    = "Allow"
-        Principal = {{ AWS = "arn:${{data.aws_partition.current.partition}}:iam::${{data.aws_caller_identity.current.account_id}}:root" }}
-        Action    = "kms:*"
-        Resource  = "*"
-      }}
-    ]
-  }})
-}}
+{primary_key_resource}
 
 resource "aws_kms_key" "jwt_backup_key" {{
   description              = "Backup Spacelift KMS key used to sign and verify JWTs"
@@ -615,11 +710,199 @@ resource "aws_sqs_queue" "iot_queue" {
     )
 
 
+def write_s3_replication_terraform_content(f, context: MigrationContext) -> None:
+    f.write(
+        f"""
+locals {{
+  replication_region_name        = "{context.s3_replica_region_name}"
+  replication_region_key_kms_arn = "{context.s3_replica_region_key_kms_arn}"
+}}
+
+resource "aws_iam_role" "replication_role" {{
+  name        = "{context.s3_replication_role_name}"
+  description = "Used to allow S3 replication from the Spacelift primary region to the DR region"
+
+  assume_role_policy = jsonencode({{
+    Version = "2012-10-17"
+    Statement = [
+      {{
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {{
+          Service = "s3.amazonaws.com"
+        }}
+      }},
+    ]
+  }})
+}}
+
+resource "aws_iam_policy" "s3_replication_policy" {{
+  name        = "{context.s3_replication_policy_name}"
+  description = "Used to allow S3 replication from the Spacelift primary region to the DR region"
+
+  policy = jsonencode({{
+    Version = "2012-10-17",
+    Statement = [
+      {{
+        Action = [
+          "s3:ListBucket",
+          "s3:GetReplicationConfiguration",
+          "s3:GetObjectVersionForReplication",
+          "s3:GetObjectVersionAcl",
+          "s3:GetObjectVersionTagging",
+          "s3:GetObjectRetention",
+          "s3:GetObjectLegalHold"
+        ],
+        Effect   = "Allow",
+        Resource = [
+          module.spacelift.states_bucket_arn,
+          "${{module.spacelift.states_bucket_arn}}/*",
+          module.spacelift.run_logs_bucket_arn,
+          "${{module.spacelift.run_logs_bucket_arn}}/*",
+          module.spacelift.modules_bucket_arn,
+          "${{module.spacelift.modules_bucket_arn}}/*",
+          module.spacelift.policy_inputs_bucket_arn,
+          "${{module.spacelift.policy_inputs_bucket_arn}}/*",
+          module.spacelift.workspace_bucket_arn,
+          "${{module.spacelift.workspace_bucket_arn}}/*",
+        ]
+      }},
+      {{
+        Action = [
+          "s3:ReplicateObject",
+          "s3:ReplicateDelete",
+          "s3:ReplicateTags",
+          "s3:GetObjectVersionTagging",
+          "s3:ObjectOwnerOverrideToBucketOwner"
+        ],
+        Effect    = "Allow",
+        Condition = {{
+          StringLikeIfExists = {{
+            "s3:x-amz-server-side-encryption" = ["aws:kms", "AES256"],
+            "s3:x-amz-server-side-encryption-aws-kms-key-id" = "${{local.replication_region_key_kms_arn}}"
+          }}
+        }},
+        Resource = [
+          "{context.s3_states_bucket_replica_arn}/*",
+          "{context.s3_run_logs_bucket_replica_arn}/*",
+          "{context.s3_modules_bucket_replica_arn}/*",
+          "{context.s3_policy_input_bucket_replica_arn}/*",
+          "{context.s3_workspace_bucket_replica_arn}/*",
+        ]
+      }},
+      {{
+        Action = [
+          "kms:Decrypt"
+        ],
+        Effect    = "Allow",
+        Condition = {{
+          StringLike = {{
+            "kms:ViaService"                   = "s3.${{local.region}}.amazonaws.com",
+            "kms:EncryptionContext:aws:s3:arn" = [
+              "${{module.spacelift.states_bucket_arn}}/*",
+              "${{module.spacelift.run_logs_bucket_arn}}/*",
+              "${{module.spacelift.modules_bucket_arn}}/*",
+              "${{module.spacelift.policy_inputs_bucket_arn}}/*",
+              "${{module.spacelift.workspace_bucket_arn}}/*"
+            ]
+          }}
+        }},
+        Resource = aws_kms_key.master.arn
+      }},
+      {{
+        Action = [
+          "kms:Encrypt"
+        ],
+        Effect    = "Allow",
+        Condition = {{
+          StringLike = {{
+            "kms:ViaService"                   = "s3.${{local.replication_region_name}}.amazonaws.com",
+            "kms:EncryptionContext:aws:s3:arn" = [
+              "{context.s3_states_bucket_replica_arn}/*",
+              "{context.s3_run_logs_bucket_replica_arn}/*",
+              "{context.s3_modules_bucket_replica_arn}/*",
+              "{context.s3_policy_input_bucket_replica_arn}/*",
+              "{context.s3_workspace_bucket_replica_arn}/*",
+            ]
+          }}
+        }},
+        Resource = "${{local.replication_region_key_kms_arn}}"
+      }}
+    ]
+  }})
+}}
+
+resource "aws_iam_role_policy_attachment" "s3_replication_attachment" {{
+  role       = aws_iam_role.replication_role.name
+  policy_arn = aws_iam_policy.s3_replication_policy.arn
+}}
+
+{generate_s3_replication_bucket_resource("states", "module.spacelift.states_bucket_name", context.s3_states_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
+
+{generate_s3_replication_bucket_resource("run_logs", "module.spacelift.run_logs_bucket_name", context.s3_run_logs_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
+
+{generate_s3_replication_bucket_resource("modules", "module.spacelift.modules_bucket_name", context.s3_modules_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
+
+{generate_s3_replication_bucket_resource("policy_inputs", "module.spacelift.policy_inputs_bucket_name", context.s3_policy_input_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
+
+{generate_s3_replication_bucket_resource("workspaces", "module.spacelift.workspace_bucket_name", context.s3_workspace_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
+        """.lstrip()
+    )
+
+
+def generate_s3_replication_bucket_resource(
+    bucket_friendly_name: str,
+    source_bucket_name: str,
+    destination_bucket_arn: str,
+    replica_kms_key_arn: str,
+) -> str:
+    return f"""
+resource "aws_s3_bucket_replication_configuration" "{bucket_friendly_name}" {{
+  bucket = {source_bucket_name}
+
+  role = aws_iam_role.replication_role.arn
+
+  rule {{
+    id       = "spacelift-dr-replication-rule"
+    priority = 0
+    status   = "Enabled"
+
+    filter {{
+      prefix = ""
+    }}
+
+    destination {{
+      bucket        = "{destination_bucket_arn}"
+      storage_class = "STANDARD"
+
+      encryption_configuration {{
+        replica_kms_key_id = "{replica_kms_key_arn}"
+      }}
+    }}
+
+    delete_marker_replication {{
+      status = "Enabled"
+    }}
+
+    source_selection_criteria {{
+      replica_modifications {{
+        status = "Enabled"
+      }}
+
+      sse_kms_encrypted_objects {{
+        status = "Enabled"
+      }}
+    }}
+  }}
+}}
+    """.lstrip().rstrip()
+
+
 def write_iot_terraform_content(f, migration_context: MigrationContext) -> None:
     f.write(
         f"""
 resource "aws_iam_role" "iot_message_sender_role" {{
-  name = "spacelift-iot-{migration_context.region}"
+  name = "spacelift-iot-{migration_context.config.aws_region}"
 
   assume_role_policy = jsonencode({{
     Version = "2012-10-17"
