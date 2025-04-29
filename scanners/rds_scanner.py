@@ -5,6 +5,14 @@ from converters.rds_to_terraform import RDSTerraformer
 def scan_rds_resources(session: boto3.Session, terraformer: RDSTerraformer) -> None:
     print(" > Scanning RDS resources...")
 
+    if not terraformer.is_primary_region():
+        print(" >   Skipping RDS resource imports in secondary region. RDS resources will be untracked by the generated project!")
+        return
+    
+    if terraformer.uses_custom_database_connection_string():
+        print(" >   Skipping RDS resource imports due to custom database connection string. RDS resources will be untracked by the generated project!")
+        return
+
     rds = session.client("rds")
     list_resp = rds.describe_db_clusters(DBClusterIdentifier="spacelift")
 

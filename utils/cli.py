@@ -4,10 +4,10 @@ import argparse
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--region",
+        "--config",
         type=str,
         required=True,
-        help="Name of the AWS region where the resources are located",
+        help="Path to the configuration JSON file",
     )
     parser.add_argument(
         "--profile",

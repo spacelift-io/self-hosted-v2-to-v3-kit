@@ -1,7 +1,10 @@
+from utils.config import AppConfig
+
+
 class MigrationContext:
     def __init__(self):
-        # AWS region
-        self.region: str | None = None
+        # App config loaded from the SH v2 config file
+        self.config: AppConfig = None
 
         # S3 bucket names
         self.binaries_bucket_name: str | None = None
@@ -16,12 +19,21 @@ class MigrationContext:
         self.user_uploads_bucket_name: str | None = None
         self.workspace_bucket_name: str | None = None
 
+        # S3 replication configuration
+        self.s3_replication_role_name: str | None = None
+        self.s3_replication_policy_name: str | None = None
+        self.s3_replica_region_name: str | None = None
+        self.s3_replica_region_key_kms_arn: str | None = None
+        self.s3_states_bucket_replica_arn: str | None = None
+        self.s3_run_logs_bucket_replica_arn: str | None = None
+        self.s3_modules_bucket_replica_arn: str | None = None
+        self.s3_policy_input_bucket_replica_arn: str | None = None
+        self.s3_workspace_bucket_replica_arn: str | None = None
+
         # Website configuration
         self.cors_origin: str | None = None
-        self.certificate_arn: str | None = None
 
         # VPC and network configuration
-        self.uses_custom_vpc: bool = False
         self.vpc_cidr_block: str | None = None
         self.private_subnet_cidr_blocks: list[str] = ["", "", ""]
         self.public_subnet_cidr_blocks: list[str] = ["", "", ""]

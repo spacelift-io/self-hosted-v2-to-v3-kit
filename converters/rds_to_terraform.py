@@ -18,6 +18,10 @@ class RDSTerraformer(Terraformer):
         )
 
     def rds_to_terraform(self, cluster: dict, instance: dict):
+        if self.migration_context.config.uses_custom_database_connection_string():
+            # The user handles their own database outside of Cloudformation
+            return
+
         self.migration_context.rds_engine_version = cluster["EngineVersion"]
         self.migration_context.rds_preferred_backup_window = cluster["PreferredBackupWindow"]
         self.migration_context.rds_instance_identifier = instance["DBInstanceIdentifier"]

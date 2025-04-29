@@ -7,6 +7,12 @@ class S3Terraformer(Terraformer):
     def __init__(self, file_path: str, migration_context: MigrationContext):
         super().__init__(file_path, migration_context)
 
+        self.s3_replication_role_resource = "aws_iam_role.replication_role"
+        self.s3_replication_policy_resource = "aws_iam_policy.s3_replication_policy"
+        self.s3_replication_policy_attachment_resource = (
+            "aws_iam_role_policy_attachment.s3_replication_attachment"
+        )
+
         self.binaries_resource_name = "module.spacelift.module.s3.aws_s3_bucket.binaries"
         self.binaries_encryption_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.binaries"
@@ -65,6 +71,7 @@ class S3Terraformer(Terraformer):
         self.modules_public_access_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_public_access_block.modules"
         )
+        self.modules_replication_resource_name = "aws_s3_bucket_replication_configuration.modules"
 
         self.policy_resource_name = "module.spacelift.module.s3.aws_s3_bucket.policy_inputs"
         self.policy_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.policy_inputs"
@@ -76,6 +83,9 @@ class S3Terraformer(Terraformer):
         )
         self.policy_public_access_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_public_access_block.policy_inputs"
+        )
+        self.policy_bucket_replication_resource_name = (
+            "aws_s3_bucket_replication_configuration.policy_inputs"
         )
 
         self.run_logs_resource_name = "module.spacelift.module.s3.aws_s3_bucket.run_logs"
@@ -91,6 +101,9 @@ class S3Terraformer(Terraformer):
         self.run_logs_public_access_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_public_access_block.run_logs"
         )
+        self.run_logs_bucket_replication_resource_name = (
+            "aws_s3_bucket_replication_configuration.run_logs"
+        )
 
         self.states_resource_name = "module.spacelift.module.s3.aws_s3_bucket.states"
         self.states_encryption_resource_name = (
@@ -101,6 +114,9 @@ class S3Terraformer(Terraformer):
         )
         self.states_public_access_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_public_access_block.states"
+        )
+        self.states_bucket_replication_resource_name = (
+            "aws_s3_bucket_replication_configuration.states"
         )
 
         self.uploads_resource_name = "module.spacelift.module.s3.aws_s3_bucket.uploads"
@@ -143,6 +159,9 @@ class S3Terraformer(Terraformer):
         self.workspace_public_access_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_public_access_block.workspaces"
         )
+        self.workspace_bucket_replication_resource_name = (
+            "aws_s3_bucket_replication_configuration.workspaces"
+        )
 
     def s3_to_terraform(
         self,
@@ -152,6 +171,7 @@ class S3Terraformer(Terraformer):
         lifecycle_enabled,
         public_access_blocked,
         cors_rules: List[Dict],
+        bucket_replication_rules: List[Dict],
     ):
         if "downloads" in bucketName:  # In v2 we called it downloads, in v3 we call it binaries
             self.migration_context.binaries_bucket_name = bucketName
@@ -206,6 +226,14 @@ class S3Terraformer(Terraformer):
                 self.process(self.modules_lifecycle_resource_name, bucketName)
             if public_access_blocked:
                 self.process(self.modules_public_access_resource_name, bucketName)
+            if bucket_replication_rules:
+                self.migration_context.s3_modules_bucket_replica_arn = (
+                    bucket_replication_rules[0].get("Destination", {}).get("Bucket")
+                )
+                self.process(
+                    self.modules_replication_resource_name,
+                    bucketName,
+                )
 
         elif "policy-inputs" in bucketName:
             self.migration_context.policy_bucket_name = bucketName
@@ -218,6 +246,14 @@ class S3Terraformer(Terraformer):
                 self.process(self.policy_lifecycle_resource_name, bucketName)
             if public_access_blocked:
                 self.process(self.policy_public_access_resource_name, bucketName)
+            if bucket_replication_rules:
+                self.migration_context.s3_policy_input_bucket_replica_arn = (
+                    bucket_replication_rules[0].get("Destination", {}).get("Bucket")
+                )
+                self.process(
+                    self.policy_bucket_replication_resource_name,
+                    bucketName,
+                )
 
         elif "run-logs" in bucketName:
             self.migration_context.run_logs_bucket_name = bucketName
@@ -230,6 +266,14 @@ class S3Terraformer(Terraformer):
                 self.process(self.run_logs_lifecycle_resource_name, bucketName)
             if public_access_blocked:
                 self.process(self.run_logs_public_access_resource_name, bucketName)
+            if bucket_replication_rules:
+                self.migration_context.s3_run_logs_bucket_replica_arn = (
+                    bucket_replication_rules[0].get("Destination", {}).get("Bucket")
+                )
+                self.process(
+                    self.run_logs_bucket_replication_resource_name,
+                    bucketName,
+                )
 
         elif "states" in bucketName:
             self.migration_context.states_bucket_name = bucketName
@@ -240,7 +284,14 @@ class S3Terraformer(Terraformer):
                 self.process(self.states_encryption_resource_name, bucketName)
             if public_access_blocked:
                 self.process(self.states_public_access_resource_name, bucketName)
-
+            if bucket_replication_rules:
+                self.migration_context.s3_states_bucket_replica_arn = (
+                    bucket_replication_rules[0].get("Destination", {}).get("Bucket")
+                )
+                self.process(
+                    self.states_bucket_replication_resource_name,
+                    bucketName,
+                )
         elif "uploads" in bucketName:
             self.migration_context.uploads_bucket_name = bucketName
             self.process(self.uploads_resource_name, bucketName)
@@ -281,3 +332,35 @@ class S3Terraformer(Terraformer):
                 self.process(self.workspace_lifecycle_resource_name, bucketName)
             if public_access_blocked:
                 self.process(self.workspace_public_access_resource_name, bucketName)
+            if bucket_replication_rules:
+                self.migration_context.s3_workspace_bucket_replica_arn = (
+                    bucket_replication_rules[0].get("Destination", {}).get("Bucket")
+                )
+                self.process(
+                    self.workspace_bucket_replication_resource_name,
+                    bucketName,
+                )
+
+    def replication_role_to_terraform(
+        self,
+        role_name: str,
+        policy_name: str,
+        policy_arn: str,
+        s3_replica_key_kms_arn: str,
+        s3_replica_region_name: str,
+    ):
+        if role_name:
+            self.process(self.s3_replication_role_resource, role_name)
+            self.migration_context.s3_replication_role_name = role_name
+        if policy_arn:
+            self.process(self.s3_replication_policy_resource, policy_arn)
+            self.migration_context.s3_replication_policy_name = policy_name
+
+        if role_name and policy_arn:
+            self.process(
+                self.s3_replication_policy_attachment_resource,
+                f"{role_name}/{policy_arn}",
+            )
+
+        self.migration_context.s3_replica_region_name = s3_replica_region_name
+        self.migration_context.s3_replica_region_key_kms_arn = s3_replica_key_kms_arn

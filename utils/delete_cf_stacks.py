@@ -387,6 +387,8 @@ def delete_stacks(region: str, profile: Optional[str] = None) -> None:
                 "ModulesBucket",
                 "PolicyInputsBucket",
                 "RunLogsBucket",
+                "S3ReplicationPolicy",
+                "S3ReplicationRole",
                 "StatesBucket",
                 "UploadsBucket",
                 "UserUploadedWorkspacesBucket",
@@ -397,6 +399,7 @@ def delete_stacks(region: str, profile: Optional[str] = None) -> None:
             "name": "spacelift-infra-kms",
             "retain": [
                 "KMSEncryptionPrimaryKey",
+                "KMSEncryptionReplicaKey"
                 "KMSJWTAlias",
                 "KMSJWTBackupKey",
                 "KMSJWTKey",
@@ -427,7 +430,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Delete CloudFormation stacks while retaining specific resources."
     )
-    parser.add_argument("--region", help="AWS region")
+    parser.add_argument("--region", help="AWS region", required=True)
     parser.add_argument("--profile", help="AWS profile name (optional)")
     args = parser.parse_args()
 

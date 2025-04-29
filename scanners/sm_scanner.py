@@ -8,10 +8,11 @@ def scan_sm_resources(session: boto3.Session, terraformer: SMTerraformer) -> Non
 
     cloudformation = session.client("cloudformation")
 
-    [conn_string_arn] = get_resources_from_cf_stack(
+    conn_string_arn_resources = get_resources_from_cf_stack(
         cloudformation, "spacelift-infra", ["DBConnectionStringSecret"]
     )
-    terraformer.sm_to_terraform("DBConnectionStringSecret", conn_string_arn)
+    if conn_string_arn_resources:
+        terraformer.sm_to_terraform("DBConnectionStringSecret", conn_string_arn_resources[0])
 
     [slack_credentials_arn] = get_resources_from_cf_stack(
         cloudformation, "spacelift-infra", ["SlackCredentialsSecret"]

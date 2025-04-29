@@ -14,8 +14,7 @@ def get_resources_from_cf_stack(cloudformation, stack_name: str, logical_ids: Li
     resource_ids = []
 
     for logical_id in logical_ids:
-        if logical_id not in resource_map:
-            raise ValueError(f"Missing required resource '{logical_id}' in CloudFormation stack")
-        resource_ids.append(resource_map[logical_id])
+        if logical_id in resource_map:
+            resource_ids.append(resource_map[logical_id])
 
     return resource_ids

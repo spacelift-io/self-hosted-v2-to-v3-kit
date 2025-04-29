@@ -10,6 +10,7 @@ class KMSTerraformer(Terraformer):
         self.kms_jwt_encryption_key_resource_name = "aws_kms_key.jwt"
         self.kms_jwt_alias_resource_name = "aws_kms_alias.jwt_alias"
         self.kms_jwt_backup_key_resource_name = "aws_kms_key.jwt_backup_key"
+        self.kms_replica_key_resource_name = "aws_kms_replica_key.encryption_replica_key"
 
     def kms_to_terraform(self, key_id: str, logical_id: str):
         if logical_id == "KMSMasterKey":
@@ -22,3 +23,5 @@ class KMSTerraformer(Terraformer):
             self.process(self.kms_jwt_alias_resource_name, key_id)
         elif logical_id == "KMSJWTBackupKey":
             self.process(self.kms_jwt_backup_key_resource_name, key_id)
+        elif logical_id == "KMSEncryptionReplicaKey":
+            self.process(self.kms_replica_key_resource_name, key_id)

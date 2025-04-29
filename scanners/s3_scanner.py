@@ -1,12 +1,15 @@
 from typing import Dict, Any
 import boto3
 from converters.s3_to_terraform import S3Terraformer
+from converters.migration_context import MigrationContext
 from scanners.cloudformation_helper import get_resources_from_cf_stack
 
 
 def scan_s3_resources(
     session: boto3.Session, unique_suffix: str, terraformer: S3Terraformer
 ) -> None:
+    # Get the migration context which has the config
+    migration_context = terraformer.migration_context
     print(" > Scanning S3 resources...")
 
     cloudformation = session.client("cloudformation")
@@ -36,6 +39,11 @@ def scan_s3_resources(
         lifecycle_enabled = _is_lifecycle_enabled(s3, bucket_name)
         public_access_blocked = _is_public_access_blocked(s3, bucket_name)
         cors_rules = _get_bucket_cors(s3, bucket_name).get("CORSRules", [])
+        bucket_replication_rules = (
+            _get_bucket_replication(s3, bucket_name)
+            .get("ReplicationConfiguration", {})
+            .get("Rules", [])
+        )
 
         terraformer.s3_to_terraform(
             bucket_name,
@@ -44,7 +52,10 @@ def scan_s3_resources(
             lifecycle_enabled,
             public_access_blocked,
             cors_rules,
+            bucket_replication_rules,
         )
+
+    _process_replication_role(session, cloudformation, terraformer, migration_context)
 
 
 def _get_versioning_status(s3: Any, bucket_name: str) -> bool:
@@ -101,3 +112,55 @@ def _get_bucket_lifecycle(s3: Any, bucket_name: str) -> Dict:
         if e.response["Error"]["Code"] == "NoSuchLifecycleConfiguration":
             return {"Rules": []}
         raise
+
+
+def _get_bucket_replication(s3: Any, bucket_name: str) -> Dict:
+    try:
+        return s3.get_bucket_replication(Bucket=bucket_name)
+    except s3.exceptions.ClientError as e:
+        if e.response["Error"]["Code"] == "ReplicationConfigurationNotFoundError":
+            return {"Rules": []}
+        raise
+
+
+def _process_replication_role(
+    session: boto3.Session,
+    cloudformation: Any,
+    terraformer: S3Terraformer,
+    migration_context: MigrationContext,
+) -> None:
+    if (
+        not migration_context.config
+        or not migration_context.config.disaster_recovery
+        or not migration_context.config.disaster_recovery.s3_bucket_replication
+        or not migration_context.config.disaster_recovery.s3_bucket_replication.enabled
+    ):
+        return
+
+    replication_resources = get_resources_from_cf_stack(
+        cloudformation, "spacelift-infra-s3", ["S3ReplicationRole", "S3ReplicationPolicy"]
+    )
+
+    if not replication_resources:
+        return
+
+    (replication_role_name, replication_policy_arn) = replication_resources
+
+    iam = session.client("iam")
+    policy = iam.get_policy(PolicyArn=replication_policy_arn)
+
+    terraformer.replication_role_to_terraform(
+        replication_role_name,
+        policy["Policy"]["PolicyName"],
+        replication_policy_arn,
+        migration_context.config.disaster_recovery.s3_bucket_replication.replica_kms_key_arn,
+        migration_context.config.disaster_recovery.replica_region,
+    )
+
+    print(" > Replication configuration is the following:")
+    print(f" >   - Replication role name: {replication_role_name}")
+    print(f" >   - Replication policy ARN: {replication_policy_arn}")
+    print(
+        f" >   - Replica KMS key ARN: {migration_context.config.disaster_recovery.encryption_primary_key_arn}"
+    )
+    print(f" >   - Replica region: {migration_context.config.disaster_recovery.replica_region}")

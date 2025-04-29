@@ -107,8 +107,11 @@ class EC2Terraformer(Terraformer):
         self.database_server_ingress_rule_resource_name = "module.spacelift.module.network[0].aws_vpc_security_group_ingress_rule.database_server_ingress_rule[0]"
         self.database_scheduler_ingress_rule_resource_name = "module.spacelift.module.network[0].aws_vpc_security_group_ingress_rule.database_scheduler_ingress_rule[0]"
 
-    def set_uses_custom_vpc(self, uses_custom_vpc: bool):
-        self.migration_context.uses_custom_vpc = uses_custom_vpc
+    def uses_custom_vpc(self) -> bool:
+        return (
+            self.migration_context.config.vpc_config
+            and self.migration_context.config.vpc_config.use_custom_vpc
+        )
 
     def vpc_to_terraform(self, vpc_id: str, cidr_block: str, tags: List[Dict]):
         for tag in tags:
@@ -118,24 +121,24 @@ class EC2Terraformer(Terraformer):
 
     def subnet_to_terraform(self, subnet_id: str, cidr_block: str, tags: List[Dict]):
         for tag in tags:
-            if tag["Key"] == "Name" and tag["Value"] == "Spacelift PrivateSubnet1":
+            if tag["Key"] == "aws:cloudformation:logical-id" and tag["Value"] == "PrivateSubnet1":
                 self.migration_context.private_subnet_cidr_blocks[0] = cidr_block
                 self.process(self.private_subnet_resource_name_one, subnet_id)
-            elif tag["Key"] == "Name" and tag["Value"] == "Spacelift PrivateSubnet2":
+            elif tag["Key"] == "aws:cloudformation:logical-id" and tag["Value"] == "PrivateSubnet2":
                 self.migration_context.private_subnet_cidr_blocks[1] = cidr_block
                 self.process(self.private_subnet_resource_name_two, subnet_id)
-            elif tag["Key"] == "Name" and tag["Value"] == "Spacelift PrivateSubnet3":
+            elif tag["Key"] == "aws:cloudformation:logical-id" and tag["Value"] == "PrivateSubnet3":
                 self.migration_context.private_subnet_cidr_blocks[2] = cidr_block
                 self.process(self.private_subnet_resource_name_three, subnet_id)
-            elif tag["Key"] == "Name" and tag["Value"] == "Spacelift PublicSubnet1":
+            elif tag["Key"] == "aws:cloudformation:logical-id" and tag["Value"] == "PublicSubnet1":
                 self.migration_context.public_subnet_id_1 = subnet_id
                 self.migration_context.public_subnet_cidr_blocks[0] = cidr_block
                 self.process(self.public_subnet_resource_name_one, subnet_id)
-            elif tag["Key"] == "Name" and tag["Value"] == "Spacelift PublicSubnet2":
+            elif tag["Key"] == "aws:cloudformation:logical-id" and tag["Value"] == "PublicSubnet2":
                 self.migration_context.public_subnet_id_2 = subnet_id
                 self.migration_context.public_subnet_cidr_blocks[1] = cidr_block
                 self.process(self.public_subnet_resource_name_two, subnet_id)
-            elif tag["Key"] == "Name" and tag["Value"] == "Spacelift PublicSubnet3":
+            elif tag["Key"] == "aws:cloudformation:logical-id" and tag["Value"] == "PublicSubnet3":
                 self.migration_context.public_subnet_id_3 = subnet_id
                 self.migration_context.public_subnet_cidr_blocks[2] = cidr_block
                 self.process(self.public_subnet_resource_name_three, subnet_id)
@@ -313,6 +316,11 @@ class EC2Terraformer(Terraformer):
                 tag["Key"] == "aws:cloudformation:logical-id"
                 and tag["Value"] == "DatabaseSecurityGroup"
             ):
+                if self.migration_context.config.uses_custom_database_connection_string():
+                    # When a custom connection string is used, we don't deploy the database, nor its security group
+                    # so we can't import those resources
+                    return
+
                 self.process(
                     self.database_sg_resource_name,
                     security_group_id,
