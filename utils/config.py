@@ -158,6 +158,13 @@ class AppConfig:
             and len(self.database.connection_string_ssm_arn) > 0
         )
 
+    def has_custom_proxy_config(self) -> bool:
+        return self.proxy_config and (
+            self.proxy_config.http_proxy
+            or self.proxy_config.https_proxy
+            or self.proxy_config.no_proxy
+        )
+
 
 def load_app_config(config_path: str) -> AppConfig:
     try:

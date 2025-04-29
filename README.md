@@ -20,7 +20,7 @@ Key features:
 - Creates a script to handle a small infrastructural difference between V2 and V3 (Internet gateway refactoring)
 - Creates a script to tear down the old CloudFormation stacks with retaining resources
 - Enables zero-downtime migration (flipping the CNAME record to the new load balancer)
-- Supports custom VPC configurations (using existing VPC resources instead of creating new ones)
+- Supports custom VPC configurations (where `.vpc_config.use_custom_vpc` is set to `true`)
 - Supports bi-regional disaster recovery setups
 
 ## 📦 Requirements

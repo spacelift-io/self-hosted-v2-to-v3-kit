@@ -249,16 +249,16 @@ module "spacelift" {{
 
 def create_spacelift_services_module(context: MigrationContext) -> str:
     if context.config.vpc_config and context.config.vpc_config.use_custom_vpc:
-        vpc_config = f"""#
+        vpc_config = f"""
 #  vpc_id                      = "{context.config.vpc_config.vpc_id}"
 #  ecs_subnets                 = {format_subnet_ids(context.config.vpc_config.private_subnet_ids)}
 #  server_lb_subnets           = {format_subnet_ids(context.config.vpc_config.public_subnet_ids)}
 #  server_security_group_id    = "{context.config.vpc_config.server_security_group_id}"
 #  drain_security_group_id     = "{context.config.vpc_config.drain_security_group_id}"
 #  scheduler_security_group_id = "{context.config.vpc_config.scheduler_security_group_id}"
-"""
+""".lstrip()
     else:
-        vpc_config = """#
+        vpc_config = """
 #  vpc_id      = module.spacelift.vpc_id
 #  ecs_subnets = module.spacelift.private_subnet_ids
 #  
@@ -267,7 +267,7 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #  
 #  drain_security_group_id     = module.spacelift.drain_security_group_id
 #  scheduler_security_group_id = module.spacelift.scheduler_security_group_id
-"""
+""".lstrip()
     ecs_service_desired_count = ""
     if not context.config.is_primary_region():
         ecs_service_desired_count = """
@@ -295,6 +295,19 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #    }
 """.lstrip()
 
+    additional_env_vars = ""
+    if context.config.has_custom_proxy_config():
+        additional_env_vars = "  additional_env_vars = ["
+        if context.config.proxy_config.http_proxy:
+            additional_env_vars += f'\n#    {{ name = "HTTP_PROXY", value = "{context.config.proxy_config.http_proxy}" }},'
+        if context.config.proxy_config.https_proxy:
+            additional_env_vars += f'\n#    {{ name = "HTTPS_PROXY", value = "{context.config.proxy_config.https_proxy}" }},'
+        if context.config.proxy_config.no_proxy:
+            additional_env_vars += (
+                f'\n#    {{ name = "NO_PROXY", value = "{context.config.proxy_config.no_proxy}" }},'
+            )
+        additional_env_vars += "\n#  ]"
+
     return f"""
 # Uncomment after the above module applied successfully
 #module "spacelift_services" {{
@@ -311,8 +324,7 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #  kms_encryption_key_arn = {"aws_kms_key.encryption_primary.arn" if context.config.is_primary_region() else "aws_kms_replica_key.encryption_replica_key.arn"}  
 #  kms_signing_key_arn    = aws_kms_key.jwt.arn
 {f'#  iot_endpoint = "{context.config.iot_broker_endpoint}"' if context.config.iot_broker_endpoint else ""}
-# 
-#  additional_env_vars         = [] # Fill this if you need to set any additional env vars, such as HTTP_PROXY/HTTPS_PROXY/NO_PROXY
+#{additional_env_vars}
 #  secrets_manager_secret_arns = [
 {"#    module.spacelift.database_secret_arn," if not context.config.uses_custom_database_connection_string() else f'#    "{context.config.database.connection_string_ssm_arn}",'}
 #    aws_secretsmanager_secret.slack_credentials.arn,
