@@ -106,7 +106,9 @@ def _get_route_table_by_name(route_tables: List[Dict], name: str) -> Dict:
     for route_table in route_tables:
         tags = route_table.get("Tags", [])
 
-        if any(tag["Key"] == "aws:cloudformation:logical-id" and tag["Value"] == name for tag in tags):
+        if any(
+            tag["Key"] == "aws:cloudformation:logical-id" and tag["Value"] == name for tag in tags
+        ):
             return route_table
 
     raise ValueError(f"Route table with name {name} not found.")

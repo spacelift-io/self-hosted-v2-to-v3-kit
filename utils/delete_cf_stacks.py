@@ -399,7 +399,7 @@ def delete_stacks(region: str, profile: Optional[str] = None) -> None:
             "name": "spacelift-infra-kms",
             "retain": [
                 "KMSEncryptionPrimaryKey",
-                "KMSEncryptionReplicaKey"
+                "KMSEncryptionReplicaKey",
                 "KMSJWTAlias",
                 "KMSJWTBackupKey",
                 "KMSJWTKey",

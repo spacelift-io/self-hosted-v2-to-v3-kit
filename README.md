@@ -6,6 +6,14 @@ This repository contains a Python tool that converts Cloudformation-based Spacel
 
 This migration tool analyzes your existing Spacelift V2 infrastructure deployed with CloudFormation and generates equivalent Terraform code that can be applied to create new V3 resources while preserving your application's functionality. The process scans all relevant AWS resources, creates proper `import` statements, and sets up a new ECS cluster with a load balancer, allowing you to redirect traffic once the new infrastructure is ready.
 
+The migration workflow follows these steps:
+1. Scan existing AWS resources from CloudFormation stacks
+2. Generate Terraform import statements and configuration files for each resource type
+3. Create helper scripts for special migration cases (internet gateway refactoring)
+4. Apply the Terraform configuration to set up the new infrastructure
+5. Redirect traffic to the new load balancer
+6. Remove old CloudFormation stacks while retaining necessary resources
+
 Key features:
 - Scans and imports existing AWS resources (VPC, EC2, ECR, RDS, S3, KMS, IoT, SQS, etc.)
 - Generates all necessary Terraform files
@@ -13,6 +21,7 @@ Key features:
 - Creates a script to tear down the old CloudFormation stacks with retaining resources
 - Enables zero-downtime migration (flipping the CNAME record to the new load balancer)
 - Supports custom VPC configurations (using existing VPC resources instead of creating new ones)
+- Supports bi-regional disaster recovery setups
 
 ## 📦 Requirements
 
@@ -33,7 +42,7 @@ Key features:
 git clone https://github.com/spacelift-io/self-hosted-v2-to-v3-kit.git
 cd self-hosted-v2-to-v3-kit
 
-# Create a Python 3 virtual environment
+# Create a Python 3 virtual environment (requires Python 3.8+)
 python -m venv env
 
 # Activate the virtual environment
@@ -70,7 +79,7 @@ This migration tool has the same approach: it'll just inject your custom secret 
 
 > Make sure the virtualenv is activated when running the Python scripts as they depend on `boto3`.
 
-Run the main script with your AWS region:
+Run the main script with your config file path:
 
 ```bash
 python main.py --config "<sh-v2-config-file-path.json>"
@@ -83,9 +92,8 @@ Additional arguments:
 The script will:
 1. Scan for all relevant AWS resources in your current Spacelift deployment
 2. Get the unique suffix from SSM Parameter Store (from `/spacelift/random-suffix`)
-3. Get the certificate ARN from the existing load balancer
-4. Generate Terraform files
-5. Create 2 scripts: Internet gateway refactoring, and the CloudFormation deletion script
+3. Generate Terraform files in the output folder
+4. Create 2 scripts in the output folder: Internet gateway refactoring, and the CloudFormation deletion script
 
 ### Step 2: Apply the Generated Terraform Code
 
@@ -118,9 +126,6 @@ Navigate to the output directory and follow these steps:
 2. Configure the variables in `main.tf`:
    - Set `local.license_token` with your Spacelift license token
    - Set `local.spacelift_version` to the appropriate Docker tag uploaded to the ECR repositories
-   - If you're using a custom VPC, you'll need to provide values for the following `<TODO>` placeholders as well:
-     - In the `main.tf` / `spacelift` module: `rds_subnet_ids` and `rds_security_group_ids`
-     - In the `main.tf` / `spacelift_services` module: `vpc_id`, `ecs_subnets`, `server_lb_subnets`, `server_security_group_id`, `drain_security_group_id`, `scheduler_security_group_id`
   
 3. (Optional) Backend and resource tagging:
    - You could optionally set up [a remote backend](https://developer.hashicorp.com/terraform/language/backend) for Terraform state management in `main.tf`. The generated code uses a local backend by default, but you can change it to use S3 or any other supported backend.
@@ -188,7 +193,7 @@ Navigate to the output directory and follow these steps:
 10. Redirect traffic:
    - Update your `CNAME` record to point to the new load balancer DNS name (available as an output)
    - To make sure the traffic is properly routed, you can scale down the old ECS cluster's `server` service to 0 tasks
-   - If you confirmed that the new `drain` and `scheduler` services are up and running (the services are stable, the logs look good), scale down the the old `drain` and `scheduler` services as well
+   - If you confirmed that the new `drain` and `scheduler` services are up and running (the services are stable, the logs look good), scale down the old `drain` and `scheduler` services as well
 
    In case you're experiencing issues, you can just revert the DNS change and scale up the old ECS cluster's services.
 
