@@ -27,9 +27,7 @@ def get_db_password_sm_name(session: boto3.Session) -> str:
 
         response = secrets_client.list_secrets()
         secrets = response.get("SecretList", [])
-        non_deleted_secrets = [
-            secret for secret in secrets if not secret.get("DeletedDate")
-        ]
+        non_deleted_secrets = [secret for secret in secrets if not secret.get("DeletedDate")]
 
         target_secret = None
         for secret in non_deleted_secrets:
