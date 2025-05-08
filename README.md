@@ -46,7 +46,7 @@ cd self-hosted-v2-to-v3-kit
 python -m venv env
 
 # Activate the virtual environment
-# On Unix/Linux:
+# On Unix/Linux/MacOS:
 source env/bin/activate
 # On Windows:
 # env\Scripts\activate
@@ -73,7 +73,45 @@ As per the [official documentation](https://docs.spacelift.io/self-hosted/latest
 
 This migration tool has the same approach: it'll just inject your custom secret into the app, but will leave you to manage your database setup yourself. However, you are welcome to define those RDS resources and import them to the project.
 
-### Step 1: Generate Terraform project
+### Step 1: Upload new Container Images and Binaries
+
+Before you start, you need to upload the latest container images for Self-Hosted v3 to your container registry. First, make sure you have the latest Self-Hosted release .tar.gz file available, and set the following environment variables:
+
+```shell
+# The region of your existing Self-Hosted installation.
+AWS_REGION="<replace-me>"
+
+# Your ECR login URL, for example 12345678901.dkr.ecr.eu-west-1.amazonaws.com.
+PRIVATE_ECR_LOGIN_URL="<replace-me>"
+
+# The version you are installing, for example v3.0.0.
+SPACELIFT_VERSION="<replace-me>"
+
+# The name of your downloads bucket, for example 012345678901-spacelift-downloads-ab12de3
+DOWNLOADS_BUCKET_NAME="<replace-me>
+```
+
+Next, run the following commands from the same directory that contains your Self-Hosted .tar.gz file:
+
+```shell
+# Login to the private ECR
+aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${PRIVATE_ECR_LOGIN_URL}"
+
+tar -xzf self-hosted-v3-${SPACELIFT_VERSION}.tar.gz -C .
+cd self-hosted-v3-${SPACELIFT_VERSION}
+
+docker image load --input="container-images/spacelift-launcher.tar"
+docker tag "spacelift-launcher:${SPACELIFT_VERSION}" "${PRIVATE_ECR_LOGIN_URL}/spacelift-launcher:${SPACELIFT_VERSION}"
+docker push "${PRIVATE_ECR_LOGIN_URL}/spacelift-launcher:${SPACELIFT_VERSION}"
+
+docker image load --input="container-images/spacelift-backend.tar"
+docker tag "spacelift-backend:${SPACELIFT_VERSION}" "${PRIVATE_ECR_LOGIN_URL}/spacelift:${SPACELIFT_VERSION}"
+docker push "${PRIVATE_ECR_LOGIN_URL}/spacelift:${SPACELIFT_VERSION}"
+
+aws s3 cp --no-guess-mime-type "./bin/spacelift-launcher" "s3://${DOWNLOADS_BUCKET_NAME}/spacelift-launcher"
+```
+
+### Step 2: Generate Terraform project
 
 #### Prerequisites
 
@@ -95,28 +133,31 @@ The script will:
 3. Generate Terraform files in the output folder
 4. Create 2 scripts in the output folder: Internet gateway refactoring, and the CloudFormation deletion script
 
-### Step 2: Apply the Generated Terraform Code
+### Step 3: Apply the Generated Terraform Code
+
+_Please note that in the steps below we are using OpenTofu. Feel free to change the `tofu` command to `terraform` if you prefer._
 
 Navigate to the output directory and follow these steps:
 
 1. ❗️ You only need to do this step if you don't use a custom VPC, but the one packaged with Self-Hosted. This isn't a really functional change, but a small simplification we did for SelfHosted V3. Nothing really happens if you don't do it for your custom VPC.
-   This script adjusts a small infrastructural difference between V2 and V3: consolidating multiple internet gateways into one shared gateway for all public subnets. Since the commands in the scripts are executed in an instant, the existing application should not be affected - at maximum having a one-second blip for outbound traffic.
+   This script adjusts a small infrastructural difference between V2 and V3: consolidating multiple internet gateway route tables into a single table with a route for each public subnet. Since the commands in the scripts are executed in an instant, the existing application should not be affected - at maximum having a one-second blip for outbound traffic.
 
    > The reason this step is a separate script instead of being part of the Terraform code is that Terraform has troubles properly ordering the removal and additions of internet gateway subnet associations, and AWS is very picky about the order of these operations.
 
    Old infrastructure (SelfHosted V2):
    ```mermaid
    graph TD;
-      A("PublicSubnet1")-->B("InternetGateway1");
-      C("PublicSubnet2")-->D("InternetGateway3");
-      E("PublicSubnet3")-->F("InternetGateway3");
+      A("Spacelift PublicSubnet1")-->B("Spacelift InternetGatewayRouteTable1")-->C("Spacelift Gateway");
+      D("Spacelift PublicSubnet2")-->E("Spacelift InternetGatewayRouteTable2")-->F("Spacelift Gateway");
+      G("Spacelift PublicSubnet3")-->H("Spacelift InternetGatewayRouteTable3")-->I("Spacelift Gateway");
    ```
    New infrastructure (SelfHosted V3):
    ```mermaid
    graph TD;
-      A("PublicSubnet1")-->B("InternetGateway1");
-      C("PublicSubnet2")-->B;
-      E("PublicSubnet3")-->B;
+      A("Spacelift InternetGatewayRouteTable1")-->B("Spacelift Internet Gateway");
+      C("Spacelift PublicSubnet1")-->A;
+      D("Spacelift PublicSubnet2")-->A;
+      E("Spacelift PublicSubnet3")-->A;
    ```
    Run the internet gateway refactoring script by:
    ```bash
@@ -129,23 +170,23 @@ Navigate to the output directory and follow these steps:
   
 3. (Optional) Backend and resource tagging:
    - You could optionally set up [a remote backend](https://developer.hashicorp.com/terraform/language/backend) for Terraform state management in `main.tf`. The generated code uses a local backend by default, but you can change it to use S3 or any other supported backend.
-   - You could set up tags for all resources adding a `default_tags` section to the `provider` block in `main.tf` file. See an example [here](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#default_tags-configuration-block). Note that this'll generate in-place changes to resources, but those should be safe to apply.
+   - You could set up tags for all resources adding a `default_tags` section to the `provider` block in `main.tf` file. See an example [here](https://search.opentofu.org/provider/hashicorp/aws/latest#default_tags-configuration-block). Note that this'll generate in-place changes to resources, but those should be safe to apply.
 
-4. Initialize Terraform:
+4. Initialize OpenTofu:
    ```bash
-   terraform init
+   tofu init
    ```
 
 5. Create and review the execution plan:
    ```bash
-   terraform plan -out=plan
+   tofu plan -out=plan
    ```
    
    For easier review of the extensive plan:
    ```bash
-   terraform show plan > plan.txt
+   tofu show plan > plan.txt
    # or in JSON format
-   terraform show -json plan > plan.json
+   tofu show -json plan > plan.json
    ```
 
    The plan should include:
@@ -164,7 +205,7 @@ Navigate to the output directory and follow these steps:
 
 6. Apply the changes:
    ```bash
-   terraform apply plan
+   tofu apply plan
    ```
 
 7. Update the Terraform configuration:
@@ -173,8 +214,8 @@ Navigate to the output directory and follow these steps:
 
 8. Re-initialize and plan the new resources:
    ```bash
-   terraform init
-   terraform plan -out=plan
+   tofu init
+   tofu plan -out=plan
    ```
    
    This plan will create:
@@ -187,7 +228,7 @@ Navigate to the output directory and follow these steps:
 
 9.  Apply the second plan:
    ```bash
-   terraform apply plan
+   tofu apply plan
    ```
 
 10. Redirect traffic:

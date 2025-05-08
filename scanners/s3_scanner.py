@@ -34,6 +34,7 @@ def scan_s3_resources(
     s3 = session.client("s3")
 
     for bucket_name in bucket_names:
+        bucket_expiration = _get_bucket_expiration(s3, bucket_name)
         versioning_status = _get_versioning_status(s3, bucket_name)
         sse_enabled = _is_sse_enabled(s3, bucket_name)
         lifecycle_enabled = _is_lifecycle_enabled(s3, bucket_name)
@@ -47,6 +48,7 @@ def scan_s3_resources(
 
         terraformer.s3_to_terraform(
             bucket_name,
+            bucket_expiration,
             versioning_status,
             sse_enabled,
             lifecycle_enabled,
@@ -87,6 +89,15 @@ def _is_lifecycle_enabled(s3: Any, bucket_name: str) -> bool:
         if rule.get("Status") == "Enabled":
             return True
     return False
+
+
+def _get_bucket_expiration(s3: Any, bucket_name: str) -> int:
+    lifecycle_resp = _get_bucket_lifecycle(s3, bucket_name)
+
+    for rule in lifecycle_resp["Rules"]:
+        if rule.get("ID").startswith("expire-after-"):
+            return rule.get("Expiration").get("Days")
+    return 0
 
 
 def _is_public_access_blocked(s3: Any, bucket_name: str) -> bool:

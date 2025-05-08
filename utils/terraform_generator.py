@@ -142,7 +142,7 @@ def create_locals_block(context: MigrationContext) -> str:
     return f"""
 locals {{
   region            = "{context.config.aws_region}"
-  spacelift_version = "v3.0.0" # TODO: This is a tag of a Docker image uploaded to the "spacelift" and "spacelift-launcher" ECRs.
+  spacelift_version = "v3.0.0" # TODO: This is the tag of the Docker images uploaded to the "spacelift" and "spacelift-launcher" ECRs.
   website_domain    = "{context.cors_origin.replace('https://', '')}"
   website_endpoint  = "https://${{local.website_domain}}"
   license_token     = "<TODO: you need to set this value>" # This value must be set to the license token you received from Spacelift.
@@ -208,23 +208,25 @@ def create_spacelift_module(unique_suffix: str, context: MigrationContext) -> st
 
     return f"""        
 module "spacelift" {{
-  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v1.3.0"
+  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v1.3.1"
 
   region           = local.region
   website_endpoint = local.website_endpoint
   unique_suffix    = "{unique_suffix}"
-  s3_bucket_names  = {{
-    binaries     = "{context.binaries_bucket_name}"
-    deliveries   = "{context.deliveries_bucket_name}"
-    large_queue  = "{context.large_queue_name}"
-    metadata     = "{context.metadata_bucket_name}"
-    modules      = "{context.modules_bucket_name}"
-    policy       = "{context.policy_bucket_name}"
-    run_logs     = "{context.run_logs_bucket_name}"
-    states       = "{context.states_bucket_name}"
-    uploads      = "{context.uploads_bucket_name}"
-    user_uploads = "{context.user_uploads_bucket_name}"
-    workspace    = "{context.workspace_bucket_name}"
+
+  # Note that certain buckets have no retention rules in place. In which case their expiration_days will be set to 0.
+  s3_bucket_configuration  = {{
+    binaries     = {{ name = "{context.binaries_bucket_name}", expiration_days = {context.binaries_bucket_expiration_days} }}
+    deliveries   = {{ name = "{context.deliveries_bucket_name}", expiration_days = {context.deliveries_bucket_expiration_days} }}
+    large_queue  = {{ name = "{context.large_queue_name}", expiration_days = {context.large_queue_bucket_expiration_days} }}
+    metadata     = {{ name = "{context.metadata_bucket_name}", expiration_days = {context.metadata_bucket_expiration_days} }}
+    modules      = {{ name = "{context.modules_bucket_name}", expiration_days = {context.modules_bucket_expiration_days} }}
+    policy       = {{ name = "{context.policy_bucket_name}", expiration_days = {context.policy_bucket_expiration_days} }}
+    run_logs     = {{ name = "{context.run_logs_bucket_name}", expiration_days = {context.run_logs_bucket_expiration_days} }}
+    states       = {{ name = "{context.states_bucket_name}", expiration_days = {context.states_bucket_expiration_days} }}
+    uploads      = {{ name = "{context.uploads_bucket_name}", expiration_days = {context.uploads_bucket_expiration_days} }}
+    user_uploads = {{ name = "{context.user_uploads_bucket_name}", expiration_days = {context.user_uploads_bucket_expiration_days} }}
+    workspace    = {{ name = "{context.workspace_bucket_name}", expiration_days = {context.workspace_bucket_expiration_days} }}
   }}
 
   kms_arn                       = aws_kms_key.master.arn
