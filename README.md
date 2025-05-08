@@ -148,8 +148,8 @@ Navigate to the output directory and follow these steps:
    ```mermaid
    graph TD;
       A("Spacelift PublicSubnet1")-->B("Spacelift InternetGatewayRouteTable1")-->C("Spacelift Gateway");
-      D("Spacelift PublicSubnet2")-->E("Spacelift InternetGatewayRouteTable2")-->F("Spacelift Gateway");
-      G("Spacelift PublicSubnet3")-->H("Spacelift InternetGatewayRouteTable3")-->I("Spacelift Gateway");
+      D("Spacelift PublicSubnet2")-->E("Spacelift InternetGatewayRouteTable2")-->C;
+      G("Spacelift PublicSubnet3")-->H("Spacelift InternetGatewayRouteTable3")-->C;
    ```
    New infrastructure (SelfHosted V3):
    ```mermaid
@@ -192,7 +192,6 @@ Navigate to the output directory and follow these steps:
    The plan should include:
    - 100+ resource imports (a bit less for custom VPC users)
    - ECR lifecycle policy replacements
-   - A global RDS cluster creation (for high availability)
    - Various in-place changes (mostly tag-related)
 
    When reviewing, look for important changes:
