@@ -19,6 +19,19 @@ class MigrationContext:
         self.user_uploads_bucket_name: str | None = None
         self.workspace_bucket_name: str | None = None
 
+        # S3 bucket expirations
+        self.binaries_bucket_expiration_days: str | None = None
+        self.deliveries_bucket_expiration_days: str | None = None
+        self.large_queue_name: str | None = None
+        self.metadata_bucket_expiration_days: str | None = None
+        self.modules_bucket_expiration_days: str | None = None
+        self.policy_bucket_expiration_days: str | None = None
+        self.run_logs_bucket_expiration_days: str | None = None
+        self.states_bucket_expiration_days: str | None = None
+        self.uploads_bucket_expiration_days: str | None = None
+        self.user_uploads_bucket_expiration_days: str | None = None
+        self.workspace_bucket_expiration_days: str | None = None
+
         # S3 replication configuration
         self.s3_replication_role_name: str | None = None
         self.s3_replication_policy_name: str | None = None

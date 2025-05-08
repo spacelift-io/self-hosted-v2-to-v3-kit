@@ -166,6 +166,7 @@ class S3Terraformer(Terraformer):
     def s3_to_terraform(
         self,
         bucketName,
+        bucketExpirationDays,
         versioning_enabled,
         sse_enabled,
         lifecycle_enabled,
@@ -175,6 +176,7 @@ class S3Terraformer(Terraformer):
     ):
         if "downloads" in bucketName:  # In v2 we called it downloads, in v3 we call it binaries
             self.migration_context.binaries_bucket_name = bucketName
+            self.migration_context.binaries_bucket_expiration_days = bucketExpirationDays
             self.process(self.binaries_resource_name, bucketName)
             if versioning_enabled:
                 self.process(self.binaries_versioning_resource_name, bucketName)
@@ -183,6 +185,7 @@ class S3Terraformer(Terraformer):
 
         elif "deliveries" in bucketName:
             self.migration_context.deliveries_bucket_name = bucketName
+            self.migration_context.deliveries_bucket_expiration_days = bucketExpirationDays
             self.process(self.deliveries_resource_name, bucketName)
             if sse_enabled:
                 self.process(self.deliveries_encryption_resource_name, bucketName)
@@ -193,6 +196,7 @@ class S3Terraformer(Terraformer):
 
         elif "large-queue" in bucketName:
             self.migration_context.large_queue_name = bucketName
+            self.migration_context.large_queue_bucket_expiration_days = bucketExpirationDays
             self.process(self.large_queue_resource_name, bucketName)
             if versioning_enabled:
                 self.process(self.large_queue_versioning_resource_name, bucketName)
@@ -205,6 +209,7 @@ class S3Terraformer(Terraformer):
 
         elif "metadata" in bucketName:
             self.migration_context.metadata_bucket_name = bucketName
+            self.migration_context.metadata_bucket_expiration_days = bucketExpirationDays
             self.process(self.metadata_resource_name, bucketName)
             if versioning_enabled:
                 self.process(self.metadata_versioning_resource_name, bucketName)
@@ -217,6 +222,7 @@ class S3Terraformer(Terraformer):
 
         elif "modules" in bucketName:
             self.migration_context.modules_bucket_name = bucketName
+            self.migration_context.modules_bucket_expiration_days = bucketExpirationDays
             self.process(self.modules_resource_name, bucketName)
             if versioning_enabled:
                 self.process(self.modules_versioning_resource_name, bucketName)
@@ -237,6 +243,7 @@ class S3Terraformer(Terraformer):
 
         elif "policy-inputs" in bucketName:
             self.migration_context.policy_bucket_name = bucketName
+            self.migration_context.policy_bucket_expiration_days = bucketExpirationDays
             self.process(self.policy_resource_name, bucketName)
             if versioning_enabled:
                 self.process(self.policy_versioning_resource_name, bucketName)
@@ -257,6 +264,7 @@ class S3Terraformer(Terraformer):
 
         elif "run-logs" in bucketName:
             self.migration_context.run_logs_bucket_name = bucketName
+            self.migration_context.run_logs_bucket_expiration_days = bucketExpirationDays
             self.process(self.run_logs_resource_name, bucketName)
             if versioning_enabled:
                 self.process(self.run_logs_versioning_resource_name, bucketName)
@@ -277,6 +285,7 @@ class S3Terraformer(Terraformer):
 
         elif "states" in bucketName:
             self.migration_context.states_bucket_name = bucketName
+            self.migration_context.states_bucket_expiration_days = bucketExpirationDays
             self.process(self.states_resource_name, bucketName)
             if versioning_enabled:
                 self.process(self.states_versioning_resource_name, bucketName)
@@ -294,6 +303,7 @@ class S3Terraformer(Terraformer):
                 )
         elif "uploads" in bucketName:
             self.migration_context.uploads_bucket_name = bucketName
+            self.migration_context.uploads_bucket_expiration_days = bucketExpirationDays
             self.process(self.uploads_resource_name, bucketName)
             for rule in cors_rules:
                 allowed_origins = rule.get("AllowedOrigins", [])
@@ -311,6 +321,7 @@ class S3Terraformer(Terraformer):
 
         elif "user-uploaded-workspaces" in bucketName:
             self.migration_context.user_uploads_bucket_name = bucketName
+            self.migration_context.user_uploads_bucket_expiration_days = bucketExpirationDays
             self.process(self.user_uploads_resource_name, bucketName)
             if versioning_enabled:
                 self.process(self.user_uploads_versioning_resource_name, bucketName)
@@ -323,6 +334,7 @@ class S3Terraformer(Terraformer):
 
         elif "workspace" in bucketName:
             self.migration_context.workspace_bucket_name = bucketName
+            self.migration_context.workspace_bucket_expiration_days = bucketExpirationDays
             self.process(self.workspace_resource_name, bucketName)
             if versioning_enabled:
                 self.process(self.workspace_versioning_resource_name, bucketName)
