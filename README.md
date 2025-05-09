@@ -97,8 +97,8 @@ Next, run the following commands from the same directory that contains your Self
 # Login to the private ECR
 aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${PRIVATE_ECR_LOGIN_URL}"
 
-tar -xzf self-hosted-v3-${SPACELIFT_VERSION}.tar.gz -C .
-cd self-hosted-v3-${SPACELIFT_VERSION}
+tar -xzf self-hosted-${SPACELIFT_VERSION}.tar.gz -C .
+cd self-hosted-${SPACELIFT_VERSION}
 
 docker image load --input="container-images/spacelift-launcher.tar"
 docker tag "spacelift-launcher:${SPACELIFT_VERSION}" "${PRIVATE_ECR_LOGIN_URL}/spacelift-launcher:${SPACELIFT_VERSION}"
