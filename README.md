@@ -88,7 +88,7 @@ PRIVATE_ECR_LOGIN_URL="<replace-me>"
 SPACELIFT_VERSION="<replace-me>"
 
 # The name of your downloads bucket, for example 012345678901-spacelift-downloads-ab12de3
-DOWNLOADS_BUCKET_NAME="<replace-me>
+DOWNLOADS_BUCKET_NAME="<replace-me>"
 ```
 
 Next, run the following commands from the same directory that contains your Self-Hosted .tar.gz file:
