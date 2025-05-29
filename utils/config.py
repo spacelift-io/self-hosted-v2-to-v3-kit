@@ -147,6 +147,7 @@ class AppConfig:
     global_resource_tags: Optional[List[TagConfig]] = None
     s3_config: Optional[S3Config] = None
     automatically_report_usage_data: Optional[bool] = None
+    webhooks_endpoint: Optional[str] = None
 
     def is_primary_region(self) -> bool:
         return not (self.disaster_recovery and self.disaster_recovery.is_dr_instance)
