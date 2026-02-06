@@ -27,7 +27,7 @@ class S3Terraformer(Terraformer):
             "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.deliveries"
         )
         self.deliveries_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.deliveries"
+            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.deliveries[0]"
         )
 
         self.large_queue_resource_name = (
@@ -41,7 +41,7 @@ class S3Terraformer(Terraformer):
             "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.large_queue_messages"
         )
         self.large_queue_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.large_queue_messages"
+            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.large_queue_messages[0]"
         )
 
         self.metadata_resource_name = "module.spacelift.module.s3.aws_s3_bucket.metadata"
@@ -55,7 +55,7 @@ class S3Terraformer(Terraformer):
             "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.metadata"
         )
         self.metadata_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.metadata"
+            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.metadata[0]"
         )
 
         self.modules_resource_name = "module.spacelift.module.s3.aws_s3_bucket.modules"
@@ -69,7 +69,7 @@ class S3Terraformer(Terraformer):
             "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.modules"
         )
         self.modules_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.modules"
+            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.modules[0]"
         )
         self.modules_replication_resource_name = "aws_s3_bucket_replication_configuration.modules"
 
@@ -82,7 +82,7 @@ class S3Terraformer(Terraformer):
             "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.policy_inputs"
         )
         self.policy_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.policy_inputs"
+            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.policy_inputs[0]"
         )
         self.policy_bucket_replication_resource_name = (
             "aws_s3_bucket_replication_configuration.policy_inputs"
@@ -99,7 +99,7 @@ class S3Terraformer(Terraformer):
             "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.run_logs"
         )
         self.run_logs_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.run_logs"
+            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.run_logs[0]"
         )
         self.run_logs_bucket_replication_resource_name = (
             "aws_s3_bucket_replication_configuration.run_logs"
@@ -113,7 +113,7 @@ class S3Terraformer(Terraformer):
             "module.spacelift.module.s3.aws_s3_bucket_versioning.states"
         )
         self.states_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.states"
+            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.states[0]"
         )
         self.states_bucket_replication_resource_name = (
             "aws_s3_bucket_replication_configuration.states"
@@ -130,7 +130,7 @@ class S3Terraformer(Terraformer):
             "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.uploads"
         )
         self.uploads_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.uploads"
+            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.uploads[0]"
         )
         self.uploads_cors_resource_name = (
             "module.spacelift.module.s3.aws_s3_bucket_cors_configuration.uploads[0]"
@@ -145,7 +145,7 @@ class S3Terraformer(Terraformer):
             "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.user_uploads"
         )
         self.user_uploads_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.user_uploads"
+            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.user_uploads[0]"
         )
 
         self.workspace_resource_name = "module.spacelift.module.s3.aws_s3_bucket.workspaces"
@@ -157,7 +157,7 @@ class S3Terraformer(Terraformer):
             "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.workspaces"
         )
         self.workspace_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.workspaces"
+            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.workspaces[0]"
         )
         self.workspace_bucket_replication_resource_name = (
             "aws_s3_bucket_replication_configuration.workspaces"

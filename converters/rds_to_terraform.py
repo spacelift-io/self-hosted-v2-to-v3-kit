@@ -17,7 +17,7 @@ class RDSTerraformer(Terraformer):
             "module.spacelift.module.rds[0].aws_rds_cluster_parameter_group.spacelift"
         )
 
-    def rds_to_terraform(self, cluster: dict, instance: dict):
+    def rds_to_terraform(self, cluster: dict, instance: dict, param_group: dict):
         if self.migration_context.config.uses_custom_database_connection_string():
             # The user handles their own database outside of Cloudformation
             return
@@ -26,6 +26,8 @@ class RDSTerraformer(Terraformer):
         self.migration_context.rds_preferred_backup_window = cluster["PreferredBackupWindow"]
         self.migration_context.rds_instance_identifier = instance["DBInstanceIdentifier"]
         self.migration_context.rds_instance_class = instance["DBInstanceClass"]
+        self.migration_context.rds_parameter_group_name = param_group["DBClusterParameterGroupName"]
+        self.migration_context.rds_parameter_group_description = param_group["Description"]
 
         self.process(
             self.db_subnet_group_resource_name,
@@ -38,5 +40,5 @@ class RDSTerraformer(Terraformer):
         )
         self.process(
             self.parameter_group_resource_name,
-            "spacelift",
+            self.migration_context.rds_parameter_group_name,
         )

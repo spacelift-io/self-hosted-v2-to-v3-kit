@@ -23,6 +23,13 @@ Key features:
 - Supports custom VPC configurations (where `.vpc_config.use_custom_vpc` is set to `true`)
 - Supports bi-regional disaster recovery setups
 
+## 📊 Compatibility Matrix
+
+| Spacelift version | Migration kit version | [AWS Spacelift module](https://github.com/spacelift-io/terraform-aws-spacelift-selfhosted) | [AWS ECS module](https://github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted) |
+| ----------------- | --------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| >= 2.6.0, < 4.0.0 | 1.0.1                 | 1.3.1                                                                                      | 1.1.0                                                                                    |
+| >= 2.6.0, < 6.0.0 | 1.1.0                 | 2.1.1                                                                                      | 2.1.0                                                                                    |
+
 ## 📦 Requirements
 
 - At least Self-hosted v2.6.0 installed
