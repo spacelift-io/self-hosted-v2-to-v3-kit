@@ -11,6 +11,7 @@ class DatabaseConfig:
     instance_class: Optional[str] = None
     connection_string_ssm_arn: Optional[str] = None
     connection_string_ssm_kms_arn: Optional[str] = None
+    backup_retention_period_days: Optional[str] = None
 
 
 @dataclass
