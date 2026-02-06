@@ -34,4 +34,8 @@ def scan_rds_resources(session: boto3.Session, terraformer: RDSTerraformer) -> N
         if len(instances) != 1:
             raise Exception(f"Expected exactly one instance, but found {len(instances)}")
 
-        terraformer.rds_to_terraform(cluster, instances[0])
+        param_group = rds.describe_db_cluster_parameter_groups(
+            DBClusterParameterGroupName=cluster["DBClusterParameterGroup"]
+        )["DBClusterParameterGroups"][0]
+
+        terraformer.rds_to_terraform(cluster, instances[0], param_group)

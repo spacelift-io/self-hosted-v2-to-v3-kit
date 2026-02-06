@@ -64,3 +64,5 @@ class MigrationContext:
         self.rds_preferred_backup_window: str | None = None
         self.rds_instance_identifier: str | None = None
         self.rds_instance_class: str | None = None
+        self.rds_parameter_group_name: str | None = None
+        self.rds_parameter_group_description: str | None = None

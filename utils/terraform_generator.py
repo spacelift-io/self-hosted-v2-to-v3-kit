@@ -125,7 +125,7 @@ terraform {{
   required_providers {{
     aws = {{
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }}
   }}
 
@@ -177,9 +177,9 @@ def create_spacelift_module(unique_suffix: str, context: MigrationContext) -> st
   rds_engine_version              = "{context.rds_engine_version}"
   rds_preferred_backup_window     = "{context.rds_preferred_backup_window}"
   rds_regional_cluster_identifier = "spacelift"
-  rds_parameter_group_name        = "spacelift"
+  rds_parameter_group_name        = "{context.rds_parameter_group_name}"
   rds_subnet_group_name           = "spacelift"
-  rds_parameter_group_description = "Spacelift core product database"
+  rds_parameter_group_description = "{context.rds_parameter_group_description}"
   rds_password_sm_arn             = {get_db_password_arn(context)}
   rds_instance_configuration      = {{
     "primary" = {{
@@ -208,7 +208,7 @@ def create_spacelift_module(unique_suffix: str, context: MigrationContext) -> st
 
     return f"""        
 module "spacelift" {{
-  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v1.3.1"
+  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v2.1.1"
 
   region           = local.region
   website_endpoint = local.website_endpoint
@@ -238,10 +238,11 @@ module "spacelift" {{
   launcher_ecr_repository_name = "spacelift-launcher"
 
   security_group_names = {{
-    database  = "database_sg"
-    drain     = "drain_sg"
-    scheduler = "scheduler_sg"
-    server    = "server_sg"
+    database    = "database_sg"
+    drain       = "drain_sg"
+    scheduler   = "scheduler_sg"
+    server      = "server_sg"
+    vcs_gateway = "" # Mandatory, but leave it empty
   }}
         
 {rds_section}        
@@ -313,7 +314,7 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
     return f"""
 # Uncomment after the above module applied successfully
 #module "spacelift_services" {{
-#  source = "github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted?ref=v1.1.0"
+#  source = "github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted?ref=v2.1.0"
 #  
 #  region               = local.region
 #  unique_suffix        = module.spacelift.unique_suffix
