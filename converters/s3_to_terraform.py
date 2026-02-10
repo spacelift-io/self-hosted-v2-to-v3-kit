@@ -13,151 +13,137 @@ class S3Terraformer(Terraformer):
             "aws_iam_role_policy_attachment.s3_replication_attachment"
         )
 
-        self.binaries_resource_name = "module.spacelift.module.s3.aws_s3_bucket.binaries"
-        self.binaries_encryption_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.binaries"
-        )
+        self.binaries_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket.binaries"
+        self.binaries_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.binaries"
         self.binaries_versioning_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_versioning.binaries"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_versioning.binaries"
         )
 
-        self.deliveries_resource_name = "module.spacelift.module.s3.aws_s3_bucket.deliveries"
-        self.deliveries_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.deliveries"
+        self.deliveries_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket.deliveries"
+        self.deliveries_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.deliveries"
         self.deliveries_lifecycle_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.deliveries"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_lifecycle_configuration.deliveries"
         )
         self.deliveries_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.deliveries[0]"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_public_access_block.deliveries[0]"
         )
 
         self.large_queue_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket.large_queue_messages"
+            f"{self.module_prefix}module.s3.aws_s3_bucket.large_queue_messages"
         )
-        self.large_queue_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.large_queue_messages"
+        self.large_queue_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.large_queue_messages"
         self.large_queue_versioning_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_versioning.large_queue_messages"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_versioning.large_queue_messages"
         )
-        self.large_queue_lifecycle_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.large_queue_messages"
-        )
-        self.large_queue_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.large_queue_messages[0]"
-        )
+        self.large_queue_lifecycle_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_lifecycle_configuration.large_queue_messages"
+        self.large_queue_public_access_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_public_access_block.large_queue_messages[0]"
 
-        self.metadata_resource_name = "module.spacelift.module.s3.aws_s3_bucket.metadata"
-        self.metadata_encryption_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.metadata"
-        )
+        self.metadata_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket.metadata"
+        self.metadata_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.metadata"
         self.metadata_versioning_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_versioning.metadata"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_versioning.metadata"
         )
         self.metadata_lifecycle_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.metadata"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_lifecycle_configuration.metadata"
         )
         self.metadata_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.metadata[0]"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_public_access_block.metadata[0]"
         )
 
-        self.modules_resource_name = "module.spacelift.module.s3.aws_s3_bucket.modules"
-        self.modules_encryption_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.modules"
-        )
+        self.modules_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket.modules"
+        self.modules_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.modules"
         self.modules_versioning_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_versioning.modules"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_versioning.modules"
         )
         self.modules_lifecycle_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.modules"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_lifecycle_configuration.modules"
         )
         self.modules_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.modules[0]"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_public_access_block.modules[0]"
         )
         self.modules_replication_resource_name = "aws_s3_bucket_replication_configuration.modules"
 
-        self.policy_resource_name = "module.spacelift.module.s3.aws_s3_bucket.policy_inputs"
-        self.policy_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.policy_inputs"
+        self.policy_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket.policy_inputs"
+        self.policy_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.policy_inputs"
         self.policy_versioning_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_versioning.policy_inputs"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_versioning.policy_inputs"
         )
         self.policy_lifecycle_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.policy_inputs"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_lifecycle_configuration.policy_inputs"
         )
         self.policy_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.policy_inputs[0]"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_public_access_block.policy_inputs[0]"
         )
         self.policy_bucket_replication_resource_name = (
             "aws_s3_bucket_replication_configuration.policy_inputs"
         )
 
-        self.run_logs_resource_name = "module.spacelift.module.s3.aws_s3_bucket.run_logs"
-        self.run_logs_encryption_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.run_logs"
-        )
+        self.run_logs_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket.run_logs"
+        self.run_logs_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.run_logs"
         self.run_logs_versioning_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_versioning.run_logs"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_versioning.run_logs"
         )
         self.run_logs_lifecycle_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.run_logs"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_lifecycle_configuration.run_logs"
         )
         self.run_logs_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.run_logs[0]"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_public_access_block.run_logs[0]"
         )
         self.run_logs_bucket_replication_resource_name = (
             "aws_s3_bucket_replication_configuration.run_logs"
         )
 
-        self.states_resource_name = "module.spacelift.module.s3.aws_s3_bucket.states"
-        self.states_encryption_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.states"
-        )
+        self.states_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket.states"
+        self.states_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.states"
         self.states_versioning_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_versioning.states"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_versioning.states"
         )
         self.states_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.states[0]"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_public_access_block.states[0]"
         )
         self.states_bucket_replication_resource_name = (
             "aws_s3_bucket_replication_configuration.states"
         )
 
-        self.uploads_resource_name = "module.spacelift.module.s3.aws_s3_bucket.uploads"
-        self.uploads_encryption_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.uploads"
-        )
+        self.uploads_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket.uploads"
+        self.uploads_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.uploads"
         self.uploads_versioning_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_versioning.uploads"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_versioning.uploads"
         )
         self.uploads_lifecycle_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.uploads"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_lifecycle_configuration.uploads"
         )
         self.uploads_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.uploads[0]"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_public_access_block.uploads[0]"
         )
         self.uploads_cors_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_cors_configuration.uploads[0]"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_cors_configuration.uploads[0]"
         )
 
-        self.user_uploads_resource_name = "module.spacelift.module.s3.aws_s3_bucket.user_uploads"
-        self.user_uploads_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.user_uploads"
+        self.user_uploads_resource_name = (
+            f"{self.module_prefix}module.s3.aws_s3_bucket.user_uploads"
+        )
+        self.user_uploads_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.user_uploads"
         self.user_uploads_versioning_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_versioning.user_uploads"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_versioning.user_uploads"
         )
         self.user_uploads_lifecycle_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.user_uploads"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_lifecycle_configuration.user_uploads"
         )
         self.user_uploads_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.user_uploads[0]"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_public_access_block.user_uploads[0]"
         )
 
-        self.workspace_resource_name = "module.spacelift.module.s3.aws_s3_bucket.workspaces"
-        self.workspace_encryption_resource_name = "module.spacelift.module.s3.aws_s3_bucket_server_side_encryption_configuration.workspaces"
+        self.workspace_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket.workspaces"
+        self.workspace_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.workspaces"
         self.workspace_versioning_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_versioning.workspaces"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_versioning.workspaces"
         )
         self.workspace_lifecycle_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_lifecycle_configuration.workspaces"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_lifecycle_configuration.workspaces"
         )
         self.workspace_public_access_resource_name = (
-            "module.spacelift.module.s3.aws_s3_bucket_public_access_block.workspaces[0]"
+            f"{self.module_prefix}module.s3.aws_s3_bucket_public_access_block.workspaces[0]"
         )
         self.workspace_bucket_replication_resource_name = (
             "aws_s3_bucket_replication_configuration.workspaces"

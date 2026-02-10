@@ -22,4 +22,12 @@ def parse_args() -> argparse.Namespace:
         default="dist",
         help="Output directory path for Terraform files",
     )
+    parser.add_argument(
+        "--target-module",
+        type=str,
+        required=False,
+        default="ecs",
+        choices=["ecs", "eks"],
+        help="Target Terraform module type (default: ecs)",
+    )
     return parser.parse_args()

@@ -7,14 +7,16 @@ class RDSTerraformer(Terraformer):
         super().__init__(file_path, migration_context)
 
         self.db_subnet_group_resource_name = (
-            "module.spacelift.module.rds[0].aws_db_subnet_group.db_subnet_group"
+            f"{self.module_prefix}module.rds[0].aws_db_subnet_group.db_subnet_group"
         )
-        self.db_cluster_resource_name = "module.spacelift.module.rds[0].aws_rds_cluster.db_cluster"
+        self.db_cluster_resource_name = (
+            f"{self.module_prefix}module.rds[0].aws_rds_cluster.db_cluster"
+        )
         self.db_instance_resource_name = (
-            'module.spacelift.module.rds[0].aws_rds_cluster_instance.db_instance["primary"]'
+            f'{self.module_prefix}module.rds[0].aws_rds_cluster_instance.db_instance["primary"]'
         )
         self.parameter_group_resource_name = (
-            "module.spacelift.module.rds[0].aws_rds_cluster_parameter_group.spacelift"
+            f"{self.module_prefix}module.rds[0].aws_rds_cluster_parameter_group.spacelift"
         )
 
     def rds_to_terraform(self, cluster: dict, instance: dict, param_group: dict):

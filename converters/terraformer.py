@@ -7,6 +7,7 @@ class Terraformer(ABC):
     def __init__(self, file_path: str, migration_context: MigrationContext):
         self.file_path = file_path
         self.migration_context = migration_context
+        self.module_prefix = migration_context.module_prefix
 
     def process(self, resource_name: str, to: str):
         with open(self.file_path, "a") as f:

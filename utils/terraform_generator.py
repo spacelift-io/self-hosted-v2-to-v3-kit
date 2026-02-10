@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import List, Optional
-from converters.migration_context import MigrationContext
+
+from converters.migration_context import MigrationContext, TargetType
 import os
 import shutil
 
@@ -15,6 +16,18 @@ def generate_tf_files(
         str(Path(__file__).parent.parent / "README.md"),
         str(output_path / "README.md"),
     )
+    Path(output_path / "docs").mkdir(exist_ok=True)
+
+    if context.target == TargetType.EKS:
+        shutil.copyfile(
+            str(Path(__file__).parent.parent / "docs/cloudformation_to_eks.md"),
+            str(output_path / "docs/cloudformation_to_eks.md"),
+        )
+    else:
+        shutil.copyfile(
+            str(Path(__file__).parent.parent / "docs/cloudformation_to_ecs.md"),
+            str(output_path / "docs/cloudformation_to_ecs.md"),
+        )
 
     shutil.copyfile(
         str(Path(__file__).parent / "delete_cf_stacks.py"),
@@ -76,11 +89,14 @@ def generate_tf_files(
 
 
 def write_main_terraform_content(f, unique_suffix: str, context: MigrationContext) -> None:
-    """Write all Terraform configuration blocks to the provided file object."""
     f.write(create_terraform_provider_block(context))
     f.write(create_locals_block(context))
-    f.write(create_spacelift_module(unique_suffix, context))
-    f.write(create_spacelift_services_module(context))
+
+    if context.target == TargetType.EKS:
+        f.write(create_eks_module(unique_suffix, context))
+    else:
+        f.write(create_spacelift_module(unique_suffix, context))
+        f.write(create_spacelift_services_module(context))
 
 
 def replace_variables_in_gateway_refactor_file(
@@ -119,6 +135,14 @@ def create_terraform_provider_block(context: MigrationContext) -> str:
             "# Apply this file once internet_gateway_refactor.py script has finished running\n\n"
         )
 
+    random_provider = ""
+    if context.target == TargetType.EKS:
+        random_provider = """
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }"""
+
     return f"""
 {top_of_file_message}
 terraform {{
@@ -126,7 +150,7 @@ terraform {{
     aws = {{
       source  = "hashicorp/aws"
       version = "~> 6.0"
-    }}
+    }}{random_provider}
   }}
 
   # Optionally, set up a remote backend here
@@ -435,6 +459,129 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 """
 
 
+def create_eks_module(unique_suffix: str, context: MigrationContext) -> str:
+    if not context.config.uses_custom_database_connection_string():
+        rds_section = f"""
+  rds_engine_version         = "{context.rds_engine_version}"
+  rds_password_sm_arn        = {get_db_password_arn(context)}
+  rds_instance_configuration = {{
+    "primary" = {{
+      instance_identifier     = "{context.rds_instance_identifier}"
+      instance_class          = "{context.rds_instance_class}"
+    }}
+  }}
+  rds_preferred_backup_window     = "{context.rds_preferred_backup_window}"
+  rds_regional_cluster_identifier = "spacelift"
+  rds_parameter_group_name        = "{context.rds_parameter_group_name}"
+  rds_subnet_group_name           = "spacelift"
+  rds_parameter_group_description = "{context.rds_parameter_group_description}"
+""".rstrip()
+    else:
+        rds_section = "  create_database = false"
+
+    if context.config.vpc_config and context.config.vpc_config.use_custom_vpc:
+        vpc_config = f"""
+  create_vpc             = false
+  rds_subnet_ids         = {format_subnet_ids(context.config.vpc_config.private_subnet_ids)}
+  rds_security_group_ids = ["{context.config.vpc_config.database_security_group_id}"]
+"""
+    else:
+        public_subnet_cidr_blocks = format_subnet_cidr_blocks(context.public_subnet_cidr_blocks)
+        private_subnet_cidr_blocks = format_subnet_cidr_blocks(context.private_subnet_cidr_blocks)
+        vpc_config = f"""
+  vpc_cidr_block             = "{context.vpc_cidr_block}"
+  public_subnet_cidr_blocks  = {public_subnet_cidr_blocks}
+  private_subnet_cidr_blocks = {private_subnet_cidr_blocks}
+"""
+    sqs_variable_name = (
+        "sqs_queue_names_override" if context.target == TargetType.EKS else "sqs_queues"
+    )
+
+    return f"""
+module "spacelift_eks" {{
+  source = "github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted?ref=v3.4.0"
+
+  eks_upgrade_policy  = {{
+    support_type = "STANDARD"
+  }}
+
+  aws_region        = local.region
+  server_domain     = local.website_domain
+  unique_suffix     = "{unique_suffix}"
+  license_token     = local.license_token
+  spacelift_version = local.spacelift_version
+
+  kms_arn                       = aws_kms_key.master.arn
+  kms_master_key_multi_regional = false
+  kms_jwt_key_multi_regional    = false
+
+  s3_bucket_configuration = {{
+    binaries     = {{ name = "{context.binaries_bucket_name}", expiration_days = {context.binaries_bucket_expiration_days} }}
+    deliveries   = {{ name = "{context.deliveries_bucket_name}", expiration_days = {context.deliveries_bucket_expiration_days} }}
+    large_queue  = {{ name = "{context.large_queue_name}", expiration_days = {context.large_queue_bucket_expiration_days} }}
+    metadata     = {{ name = "{context.metadata_bucket_name}", expiration_days = {context.metadata_bucket_expiration_days} }}
+    modules      = {{ name = "{context.modules_bucket_name}", expiration_days = {context.modules_bucket_expiration_days} }}
+    policy       = {{ name = "{context.policy_bucket_name}", expiration_days = {context.policy_bucket_expiration_days} }}
+    run_logs     = {{ name = "{context.run_logs_bucket_name}", expiration_days = {context.run_logs_bucket_expiration_days} }}
+    states       = {{ name = "{context.states_bucket_name}", expiration_days = {context.states_bucket_expiration_days} }}
+    uploads      = {{ name = "{context.uploads_bucket_name}", expiration_days = {context.uploads_bucket_expiration_days} }}
+    user_uploads = {{ name = "{context.user_uploads_bucket_name}", expiration_days = {context.user_uploads_bucket_expiration_days} }}
+    workspace    = {{ name = "{context.workspace_bucket_name}", expiration_days = {context.workspace_bucket_expiration_days} }}
+  }}
+{vpc_config}
+  number_of_images_to_retain   = 10
+  backend_ecr_repository_name  = "spacelift"
+  launcher_ecr_repository_name = "spacelift-launcher"
+
+  security_group_names = {{
+    database  = "database_sg"
+    drain     = "drain_sg"
+    scheduler = "scheduler_sg"
+    server    = "server_sg"
+    vcs_gateway = "" # Mandatory, but leave it empty
+  }}
+
+  create_sqs = false
+{rds_section}
+
+  encryption_type        = "kms"
+  kms_encryption_key_arn = {"aws_kms_key.encryption_primary.arn" if context.config.is_primary_region() else "aws_kms_replica_key.encryption_replica_key.arn"}
+  kms_signing_key_arn    = aws_kms_key.jwt.arn
+  mqtt_broker_type     = "iotcore"
+  server_acm_arn         = "<TODO: you need to set this value>" # ACM certificate ARN for the server domain
+
+  {sqs_variable_name} = {{
+    deadletter      = aws_sqs_queue.deadletter_queue.name
+    deadletter_fifo = aws_sqs_queue.deadletter_fifo_queue.name
+    async_jobs      = aws_sqs_queue.async_jobs_queue.name
+    events_inbox    = aws_sqs_queue.events_inbox_queue.name
+    async_jobs_fifo = aws_sqs_queue.async_jobs_fifo_queue.name
+    cronjobs        = aws_sqs_queue.cronjobs_queue.name
+    webhooks        = aws_sqs_queue.webhooks_queue.name
+    iot             = aws_sqs_queue.iot_queue.name
+  }}
+}}
+
+output "shell" {{
+  value     = module.spacelift_eks.shell
+  sensitive = true
+}}
+
+output "kubernetes_ingress_class" {{
+  value = module.spacelift_eks.kubernetes_ingress_class
+}}
+
+output "kubernetes_secrets" {{
+  sensitive = true
+  value     = module.spacelift_eks.kubernetes_secrets
+}}
+
+output "helm_values" {{
+  value = module.spacelift_eks.helm_values
+}}
+"""
+
+
 def write_data_source_terraform_content(f) -> None:
     f.write(
         """
@@ -460,6 +607,18 @@ resource "aws_secretsmanager_secret" "db_pw" {
   description = "Connection string for the Spacelift database"
   kms_key_id  = aws_kms_key.master.arn
 }
+""".lstrip()
+        )
+
+    if context.target == TargetType.EKS:
+        f.write(
+            """
+# Please note that the secrets below will NOT be used by the EKS services at all.
+# They are just created here for the sake of IaC completeness during the migration.
+# Instead, you need to manually inject these variables into the services as K8s secrets.
+# Please remove all of the resources below after the K8s secrets are properly populated.
+# Make sure to keep "db_pw" secret above, as it's being attached into the RDS instance as a master password.
+
 """.lstrip()
         )
 
@@ -634,16 +793,18 @@ def write_sqs_terraform_content(f) -> None:
     f.write(
         """
 resource "aws_sqs_queue" "deadletter_queue" {
-  name                      = "spacelift-dlq"
-  kms_master_key_id         = aws_kms_key.master.arn
+  name                       = "spacelift-dlq"
+  kms_master_key_id          = aws_kms_key.master.arn
   visibility_timeout_seconds = 300
+  max_message_size           = 1048576
 }
 
 resource "aws_sqs_queue" "deadletter_fifo_queue" {
-  name                      = "spacelift-dlq.fifo"
-  fifo_queue                = true
-  kms_master_key_id         = aws_kms_key.master.arn
+  name                       = "spacelift-dlq.fifo"
+  fifo_queue                 = true
+  kms_master_key_id          = aws_kms_key.master.arn
   visibility_timeout_seconds = 300
+  max_message_size           = 1048576
 }
 
 resource "aws_sqs_queue" "async_jobs_queue" {
@@ -651,6 +812,7 @@ resource "aws_sqs_queue" "async_jobs_queue" {
   kms_master_key_id          = aws_kms_key.master.arn
   receive_wait_time_seconds  = 20
   visibility_timeout_seconds = 300
+  max_message_size           = 1048576
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.deadletter_queue.arn
@@ -663,6 +825,7 @@ resource "aws_sqs_queue" "events_inbox_queue" {
   kms_master_key_id          = aws_kms_key.master.arn
   receive_wait_time_seconds  = 20
   visibility_timeout_seconds = 300
+  max_message_size           = 1048576
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.deadletter_queue.arn
@@ -678,6 +841,7 @@ resource "aws_sqs_queue" "async_jobs_fifo_queue" {
   kms_master_key_id          = aws_kms_key.master.arn
   receive_wait_time_seconds  = 20
   visibility_timeout_seconds = 300
+  max_message_size           = 1048576
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.deadletter_fifo_queue.arn
@@ -691,6 +855,7 @@ resource "aws_sqs_queue" "cronjobs_queue" {
   receive_wait_time_seconds  = 20
   visibility_timeout_seconds = 300
   message_retention_seconds  = 3600
+  max_message_size           = 1048576
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.deadletter_queue.arn
@@ -703,6 +868,7 @@ resource "aws_sqs_queue" "webhooks_queue" {
   kms_master_key_id          = aws_kms_key.master.arn
   receive_wait_time_seconds  = 20
   visibility_timeout_seconds = 600
+  max_message_size           = 1048576
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.deadletter_queue.arn
@@ -715,6 +881,7 @@ resource "aws_sqs_queue" "iot_queue" {
   kms_master_key_id          = aws_kms_key.master.arn
   receive_wait_time_seconds  = 20
   visibility_timeout_seconds = 45
+  max_message_size           = 1048576
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.deadletter_queue.arn
@@ -770,16 +937,16 @@ resource "aws_iam_policy" "s3_replication_policy" {{
         ],
         Effect   = "Allow",
         Resource = [
-          module.spacelift.states_bucket_arn,
-          "${{module.spacelift.states_bucket_arn}}/*",
-          module.spacelift.run_logs_bucket_arn,
-          "${{module.spacelift.run_logs_bucket_arn}}/*",
-          module.spacelift.modules_bucket_arn,
-          "${{module.spacelift.modules_bucket_arn}}/*",
-          module.spacelift.policy_inputs_bucket_arn,
-          "${{module.spacelift.policy_inputs_bucket_arn}}/*",
-          module.spacelift.workspace_bucket_arn,
-          "${{module.spacelift.workspace_bucket_arn}}/*",
+          {context.module_output_ref}.states_bucket_arn,
+          "${{{context.module_output_ref}.states_bucket_arn}}/*",
+          {context.module_output_ref}.run_logs_bucket_arn,
+          "${{{context.module_output_ref}.run_logs_bucket_arn}}/*",
+          {context.module_output_ref}.modules_bucket_arn,
+          "${{{context.module_output_ref}.modules_bucket_arn}}/*",
+          {context.module_output_ref}.policy_inputs_bucket_arn,
+          "${{{context.module_output_ref}.policy_inputs_bucket_arn}}/*",
+          {context.module_output_ref}.workspace_bucket_arn,
+          "${{{context.module_output_ref}.workspace_bucket_arn}}/*",
         ]
       }},
       {{
@@ -814,11 +981,11 @@ resource "aws_iam_policy" "s3_replication_policy" {{
           StringLike = {{
             "kms:ViaService"                   = "s3.${{local.region}}.amazonaws.com",
             "kms:EncryptionContext:aws:s3:arn" = [
-              "${{module.spacelift.states_bucket_arn}}/*",
-              "${{module.spacelift.run_logs_bucket_arn}}/*",
-              "${{module.spacelift.modules_bucket_arn}}/*",
-              "${{module.spacelift.policy_inputs_bucket_arn}}/*",
-              "${{module.spacelift.workspace_bucket_arn}}/*"
+              "${{{context.module_output_ref}.states_bucket_arn}}/*",
+              "${{{context.module_output_ref}.run_logs_bucket_arn}}/*",
+              "${{{context.module_output_ref}.modules_bucket_arn}}/*",
+              "${{{context.module_output_ref}.policy_inputs_bucket_arn}}/*",
+              "${{{context.module_output_ref}.workspace_bucket_arn}}/*"
             ]
           }}
         }},
@@ -852,15 +1019,15 @@ resource "aws_iam_role_policy_attachment" "s3_replication_attachment" {{
   policy_arn = aws_iam_policy.s3_replication_policy.arn
 }}
 
-{generate_s3_replication_bucket_resource("states", "module.spacelift.states_bucket_name", context.s3_states_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
+{generate_s3_replication_bucket_resource("states", f"{context.module_output_ref}.states_bucket_name", context.s3_states_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
 
-{generate_s3_replication_bucket_resource("run_logs", "module.spacelift.run_logs_bucket_name", context.s3_run_logs_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
+{generate_s3_replication_bucket_resource("run_logs", f"{context.module_output_ref}.run_logs_bucket_name", context.s3_run_logs_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
 
-{generate_s3_replication_bucket_resource("modules", "module.spacelift.modules_bucket_name", context.s3_modules_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
+{generate_s3_replication_bucket_resource("modules", f"{context.module_output_ref}.modules_bucket_name", context.s3_modules_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
 
-{generate_s3_replication_bucket_resource("policy_inputs", "module.spacelift.policy_inputs_bucket_name", context.s3_policy_input_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
+{generate_s3_replication_bucket_resource("policy_inputs", f"{context.module_output_ref}.policy_inputs_bucket_name", context.s3_policy_input_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
 
-{generate_s3_replication_bucket_resource("workspaces", "module.spacelift.workspace_bucket_name", context.s3_workspace_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
+{generate_s3_replication_bucket_resource("workspaces", f"{context.module_output_ref}.workspace_bucket_name", context.s3_workspace_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
         """.lstrip()
     )
 
