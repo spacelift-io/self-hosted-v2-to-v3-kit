@@ -7,16 +7,16 @@ class ECRTerraformer(Terraformer):
         super().__init__(file_path, migration_context)
 
         self.backend_repository_resource_name = (
-            "module.spacelift.module.ecr.aws_ecr_repository.backend"
+            f"{self.module_prefix}module.ecr.aws_ecr_repository.backend"
         )
         self.backend_lifecycle_policy_resource_name = (
-            "module.spacelift.module.ecr.aws_ecr_lifecycle_policy.backend[0]"
+            f"{self.module_prefix}module.ecr.aws_ecr_lifecycle_policy.backend[0]"
         )
         self.launcher_repository_resource_name = (
-            "module.spacelift.module.ecr.aws_ecr_repository.launcher"
+            f"{self.module_prefix}module.ecr.aws_ecr_repository.launcher"
         )
         self.launcher_lifecycle_policy_resource_name = (
-            "module.spacelift.module.ecr.aws_ecr_lifecycle_policy.launcher[0]"
+            f"{self.module_prefix}module.ecr.aws_ecr_lifecycle_policy.launcher[0]"
         )
 
     def ecr_to_terraform(self, repository_name: str):

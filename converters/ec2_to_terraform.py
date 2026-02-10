@@ -9,103 +9,103 @@ class EC2Terraformer(Terraformer):
     def __init__(self, file_path: str, migration_context: MigrationContext):
         super().__init__(file_path, migration_context)
 
-        self.vpc_resource_name = "module.spacelift.module.network[0].aws_vpc.spacelift_vpc"
+        self.vpc_resource_name = f"{self.module_prefix}module.network[0].aws_vpc.spacelift_vpc"
         self.private_subnet_resource_name_one = (
-            "module.spacelift.module.network[0].aws_subnet.private_subnets[0]"
+            f"{self.module_prefix}module.network[0].aws_subnet.private_subnets[0]"
         )
         self.private_subnet_resource_name_two = (
-            "module.spacelift.module.network[0].aws_subnet.private_subnets[1]"
+            f"{self.module_prefix}module.network[0].aws_subnet.private_subnets[1]"
         )
         self.private_subnet_resource_name_three = (
-            "module.spacelift.module.network[0].aws_subnet.private_subnets[2]"
+            f"{self.module_prefix}module.network[0].aws_subnet.private_subnets[2]"
         )
         self.public_subnet_resource_name_one = (
-            "module.spacelift.module.network[0].aws_subnet.public_subnets[0]"
+            f"{self.module_prefix}module.network[0].aws_subnet.public_subnets[0]"
         )
         self.public_subnet_resource_name_two = (
-            "module.spacelift.module.network[0].aws_subnet.public_subnets[1]"
+            f"{self.module_prefix}module.network[0].aws_subnet.public_subnets[1]"
         )
         self.public_subnet_resource_name_three = (
-            "module.spacelift.module.network[0].aws_subnet.public_subnets[2]"
+            f"{self.module_prefix}module.network[0].aws_subnet.public_subnets[2]"
         )
 
         # Internet Gateway
         self.internet_gateway_resource_name = (
-            "module.spacelift.module.network[0].aws_internet_gateway.main"
+            f"{self.module_prefix}module.network[0].aws_internet_gateway.main"
         )
 
         # Route Tables
         self.internet_gateway_route_table_resource_name = (
-            "module.spacelift.module.network[0].aws_route_table.internet_gateway"
+            f"{self.module_prefix}module.network[0].aws_route_table.internet_gateway"
         )
         self.internet_gateway_route_table_assoc1_resource_name = (
-            "module.spacelift.module.network[0].aws_route_table_association.internet_gateway[0]"
+            f"{self.module_prefix}module.network[0].aws_route_table_association.internet_gateway[0]"
         )
         self.internet_gateway_route_table_assoc2_resource_name = (
-            "module.spacelift.module.network[0].aws_route_table_association.internet_gateway[1]"
+            f"{self.module_prefix}module.network[0].aws_route_table_association.internet_gateway[1]"
         )
         self.internet_gateway_route_table_assoc3_resource_name = (
-            "module.spacelift.module.network[0].aws_route_table_association.internet_gateway[2]"
+            f"{self.module_prefix}module.network[0].aws_route_table_association.internet_gateway[2]"
         )
 
         self.nat_gateway_route_table_resource_name_one = (
-            "module.spacelift.module.network[0].aws_route_table.nat_gateway[0]"
+            f"{self.module_prefix}module.network[0].aws_route_table.nat_gateway[0]"
         )
         self.nat_gateway_route_table_resource_name_two = (
-            "module.spacelift.module.network[0].aws_route_table.nat_gateway[1]"
+            f"{self.module_prefix}module.network[0].aws_route_table.nat_gateway[1]"
         )
         self.nat_gateway_route_table_resource_name_three = (
-            "module.spacelift.module.network[0].aws_route_table.nat_gateway[2]"
+            f"{self.module_prefix}module.network[0].aws_route_table.nat_gateway[2]"
         )
 
         self.nat_gateway_route_table_assoc_resource_name_one = (
-            "module.spacelift.module.network[0].aws_route_table_association.nat_gateway[0]"
+            f"{self.module_prefix}module.network[0].aws_route_table_association.nat_gateway[0]"
         )
         self.nat_gateway_route_table_assoc_resource_name_two = (
-            "module.spacelift.module.network[0].aws_route_table_association.nat_gateway[1]"
+            f"{self.module_prefix}module.network[0].aws_route_table_association.nat_gateway[1]"
         )
         self.nat_gateway_route_table_assoc_resource_name_three = (
-            "module.spacelift.module.network[0].aws_route_table_association.nat_gateway[2]"
+            f"{self.module_prefix}module.network[0].aws_route_table_association.nat_gateway[2]"
         )
 
         # EIPs
-        self.eip_resource_name_one = "module.spacelift.module.network[0].aws_eip.eips[0]"
-        self.eip_resource_name_two = "module.spacelift.module.network[0].aws_eip.eips[1]"
-        self.eip_resource_name_three = "module.spacelift.module.network[0].aws_eip.eips[2]"
+        self.eip_resource_name_one = f"{self.module_prefix}module.network[0].aws_eip.eips[0]"
+        self.eip_resource_name_two = f"{self.module_prefix}module.network[0].aws_eip.eips[1]"
+        self.eip_resource_name_three = f"{self.module_prefix}module.network[0].aws_eip.eips[2]"
 
         # NAT Gateways
         self.nat_gateway_resource_name_one = (
-            "module.spacelift.module.network[0].aws_nat_gateway.nat_gateways[0]"
+            f"{self.module_prefix}module.network[0].aws_nat_gateway.nat_gateways[0]"
         )
         self.nat_gateway_resource_name_two = (
-            "module.spacelift.module.network[0].aws_nat_gateway.nat_gateways[1]"
+            f"{self.module_prefix}module.network[0].aws_nat_gateway.nat_gateways[1]"
         )
         self.nat_gateway_resource_name_three = (
-            "module.spacelift.module.network[0].aws_nat_gateway.nat_gateways[2]"
+            f"{self.module_prefix}module.network[0].aws_nat_gateway.nat_gateways[2]"
         )
 
         # Security Groups
         self.scheduler_sg_resource_name = (
-            "module.spacelift.module.network[0].aws_security_group.scheduler_sg"
+            f"{self.module_prefix}module.network[0].aws_security_group.scheduler_sg"
         )
-        self.scheduler_sg_egress_rule_resource_name = "module.spacelift.module.network[0].aws_vpc_security_group_egress_rule.scheduler_sg_egress_rule"
+        self.scheduler_sg_egress_rule_resource_name = f"{self.module_prefix}module.network[0].aws_vpc_security_group_egress_rule.scheduler_sg_egress_rule"
 
         self.drain_sg_resource_name = (
-            "module.spacelift.module.network[0].aws_security_group.drain_sg"
+            f"{self.module_prefix}module.network[0].aws_security_group.drain_sg"
         )
-        self.drain_sg_egress_rule_resource_name = "module.spacelift.module.network[0].aws_vpc_security_group_egress_rule.drain_sg_egress_rule"
+        self.drain_sg_egress_rule_resource_name = f"{self.module_prefix}module.network[0].aws_vpc_security_group_egress_rule.drain_sg_egress_rule"
 
         self.server_sg_resource_name = (
-            "module.spacelift.module.network[0].aws_security_group.server_sg"
+            f"{self.module_prefix}module.network[0].aws_security_group.server_sg"
         )
-        self.server_sg_egress_rule_resource_name = "module.spacelift.module.network[0].aws_vpc_security_group_egress_rule.server_sg_egress_rule"
+        self.server_sg_egress_rule_resource_name = f"{self.module_prefix}module.network[0].aws_vpc_security_group_egress_rule.server_sg_egress_rule"
 
         self.database_sg_resource_name = (
-            "module.spacelift.module.network[0].aws_security_group.database_sg[0]"
+            f"{self.module_prefix}module.network[0].aws_security_group.database_sg[0]"
         )
-        self.database_drain_ingress_rule_resource_name = "module.spacelift.module.network[0].aws_vpc_security_group_ingress_rule.database_drain_ingress_rule[0]"
-        self.database_server_ingress_rule_resource_name = "module.spacelift.module.network[0].aws_vpc_security_group_ingress_rule.database_server_ingress_rule[0]"
-        self.database_scheduler_ingress_rule_resource_name = "module.spacelift.module.network[0].aws_vpc_security_group_ingress_rule.database_scheduler_ingress_rule[0]"
+        self.database_drain_ingress_rule_resource_name = f"{self.module_prefix}module.network[0].aws_vpc_security_group_ingress_rule.database_drain_ingress_rule[0]"
+        self.database_server_ingress_rule_resource_name = f"{self.module_prefix}module.network[0].aws_vpc_security_group_ingress_rule.database_server_ingress_rule[0]"
+        self.database_scheduler_ingress_rule_resource_name = f"{self.module_prefix}module.network[0].aws_vpc_security_group_ingress_rule.database_scheduler_ingress_rule[0]"
 
     def uses_custom_vpc(self) -> bool:
         return (

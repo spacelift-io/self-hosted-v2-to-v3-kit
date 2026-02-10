@@ -1,8 +1,17 @@
+from enum import Enum
+
 from utils.config import AppConfig
+
+
+class TargetType(Enum):
+    ECS = "ecs"
+    EKS = "eks"
 
 
 class MigrationContext:
     def __init__(self):
+        self.target: TargetType = TargetType.ECS
+
         # App config loaded from the SH v2 config file
         self.config: AppConfig = None
 
@@ -66,3 +75,15 @@ class MigrationContext:
         self.rds_instance_class: str | None = None
         self.rds_parameter_group_name: str | None = None
         self.rds_parameter_group_description: str | None = None
+
+    @property
+    def module_prefix(self) -> str:
+        if self.target == TargetType.EKS:
+            return "module.spacelift_eks.module.spacelift."
+        return "module.spacelift."
+
+    @property
+    def module_output_ref(self) -> str:
+        if self.target == TargetType.EKS:
+            return "module.spacelift_eks"
+        return "module.spacelift"
