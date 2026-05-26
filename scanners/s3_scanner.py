@@ -155,7 +155,7 @@ def _process_replication_role(
     if not replication_resources:
         return
 
-    (replication_role_name, replication_policy_arn) = replication_resources
+    replication_role_name, replication_policy_arn = replication_resources
 
     iam = session.client("iam")
     policy = iam.get_policy(PolicyArn=replication_policy_arn)

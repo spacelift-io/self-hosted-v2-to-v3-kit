@@ -10,6 +10,7 @@ The workaround looks like that:
 
 So this script follows that logic: first, try to delete the stack with a "bad" role, then try to delete it with an admin role.
 """
+
 import argparse
 import json
 import sys
