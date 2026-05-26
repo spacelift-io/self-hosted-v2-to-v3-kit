@@ -232,7 +232,7 @@ def create_spacelift_module(unique_suffix: str, context: MigrationContext) -> st
 
     return f"""        
 module "spacelift" {{
-  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v2.1.1"
+  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v2.2.0"
 
   region           = local.region
   website_endpoint = local.website_endpoint
@@ -338,7 +338,7 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
     return f"""
 # Uncomment after the above module applied successfully
 #module "spacelift_services" {{
-#  source = "github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted?ref=v2.1.0"
+#  source = "github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted?ref=v2.5.0"
 #  
 #  region               = local.region
 #  unique_suffix        = module.spacelift.unique_suffix
@@ -499,7 +499,7 @@ def create_eks_module(unique_suffix: str, context: MigrationContext) -> str:
 
     return f"""
 module "spacelift_eks" {{
-  source = "github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted?ref=v3.4.0"
+  source = "github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted?ref=v3.9.0"
 
   eks_upgrade_policy  = {{
     support_type = "STANDARD"
@@ -583,12 +583,10 @@ output "helm_values" {{
 
 
 def write_data_source_terraform_content(f) -> None:
-    f.write(
-        """
+    f.write("""
 data "aws_partition" "current" {}
 data "aws_caller_identity" "current" {}
-""".lstrip()
-    )
+""".lstrip())
 
 
 def write_secret_resources(f, context: MigrationContext) -> None:
@@ -600,30 +598,25 @@ def write_secret_resources(f, context: MigrationContext) -> None:
     )
 
     if not has_custom_connection_string:
-        f.write(
-            """
+        f.write("""
 resource "aws_secretsmanager_secret" "db_pw" {
   name        = "spacelift/database"
   description = "Connection string for the Spacelift database"
   kms_key_id  = aws_kms_key.master.arn
 }
-""".lstrip()
-        )
+""".lstrip())
 
     if context.target == TargetType.EKS:
-        f.write(
-            """
+        f.write("""
 # Please note that the secrets below will NOT be used by the EKS services at all.
 # They are just created here for the sake of IaC completeness during the migration.
 # Instead, you need to manually inject these variables into the services as K8s secrets.
 # Please remove all of the resources below after the K8s secrets are properly populated.
 # Make sure to keep "db_pw" secret above, as it's being attached into the RDS instance as a master password.
 
-""".lstrip()
-        )
+""".lstrip())
 
-    f.write(
-        """
+    f.write("""
 resource "aws_secretsmanager_secret" "slack_credentials" {
   name        = "spacelift/slack-application"
   description = "Contains the Spacelift Slack application configuration"
@@ -647,8 +640,7 @@ resource "aws_secretsmanager_secret" "saml_credentials" {
   description = "Contains the SAML certificate and signing key"
   kms_key_id  = aws_kms_key.master.arn
 }
-""".lstrip()
-    )
+""".lstrip())
 
 
 def write_kms_terraform_content(f, context: MigrationContext) -> None:
@@ -697,8 +689,7 @@ resource "aws_kms_key" "encryption_primary" {
 }
             """.lstrip()
 
-    f.write(
-        f"""
+    f.write(f"""
 resource "aws_kms_key" "master" {{
   description         = "Spacelift master KMS key"
   enable_key_rotation = true
@@ -785,13 +776,11 @@ resource "aws_kms_alias" "jwt_alias" {{
   name          = "alias/spacelift-jwt"
   target_key_id = aws_kms_key.jwt.key_id
 }}
-""".lstrip()
-    )
+""".lstrip())
 
 
 def write_sqs_terraform_content(f) -> None:
-    f.write(
-        """
+    f.write("""
 resource "aws_sqs_queue" "deadletter_queue" {
   name                       = "spacelift-dlq"
   kms_master_key_id          = aws_kms_key.master.arn
@@ -888,13 +877,11 @@ resource "aws_sqs_queue" "iot_queue" {
     maxReceiveCount     = 3
   })
 }
-""".lstrip()
-    )
+""".lstrip())
 
 
 def write_s3_replication_terraform_content(f, context: MigrationContext) -> None:
-    f.write(
-        f"""
+    f.write(f"""
 locals {{
   replication_region_name        = "{context.s3_replica_region_name}"
   replication_region_key_kms_arn = "{context.s3_replica_region_key_kms_arn}"
@@ -1028,8 +1015,7 @@ resource "aws_iam_role_policy_attachment" "s3_replication_attachment" {{
 {generate_s3_replication_bucket_resource("policy_inputs", f"{context.module_output_ref}.policy_inputs_bucket_name", context.s3_policy_input_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
 
 {generate_s3_replication_bucket_resource("workspaces", f"{context.module_output_ref}.workspace_bucket_name", context.s3_workspace_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
-        """.lstrip()
-    )
+        """.lstrip())
 
 
 def generate_s3_replication_bucket_resource(
@@ -1081,8 +1067,7 @@ resource "aws_s3_bucket_replication_configuration" "{bucket_friendly_name}" {{
 
 
 def write_iot_terraform_content(f, migration_context: MigrationContext) -> None:
-    f.write(
-        f"""
+    f.write(f"""
 resource "aws_iam_role" "iot_message_sender_role" {{
   name = "spacelift-iot-{migration_context.config.aws_region}"
 
@@ -1141,5 +1126,4 @@ resource "aws_iot_topic_rule" "iot_message_sending_rule" {{
     use_base64 = true
   }}
 }}
-""".lstrip()
-    )
+""".lstrip())
