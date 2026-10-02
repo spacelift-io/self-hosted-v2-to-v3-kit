@@ -105,7 +105,11 @@ def get_unique_suffix(session: boto3.Session) -> str:
 
 
 def main(
-    config_path: str, profile: Optional[str], output_dir: str, target_module: str = "ecs"
+    config_path: str,
+    profile: Optional[str],
+    output_dir: str,
+    target_module: str = "ecs",
+    create_eks: bool = True,
 ) -> None:
     config = load_app_config(config_path)
 
@@ -117,6 +121,7 @@ def main(
     terraform_file = initialize_output_dir(output_dir)
     migration_context = MigrationContext()
     migration_context.target = TargetType(target_module)
+    migration_context.create_eks = create_eks
     migration_context.config = config
 
     (
@@ -156,4 +161,5 @@ if __name__ == "__main__":
         profile=args.profile,
         output_dir=args.output,
         target_module=args.target_module,
+        create_eks=args.create_eks,
     )

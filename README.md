@@ -56,7 +56,7 @@ Key features:
 ## Migration Guides
 
 - [CloudFormation to ECS](docs/cloudformation_to_ecs.md) - Migrate to Terraform-managed ECS deployment
-- [CloudFormation to EKS](docs/cloudformation_to_eks.md) - Migrate to Terraform-managed EKS deployment
+- [CloudFormation to EKS](docs/cloudformation_to_eks.md) - Migrate to Terraform-managed EKS deployment (new cluster, or bring your own with `--no-create-eks`)
 
 ## ✨ Customization
 

@@ -11,6 +11,7 @@ class TargetType(Enum):
 class MigrationContext:
     def __init__(self):
         self.target: TargetType = TargetType.ECS
+        self.create_eks: bool = True
 
         # App config loaded from the SH v2 config file
         self.config: AppConfig = None
@@ -77,13 +78,21 @@ class MigrationContext:
         self.rds_parameter_group_description: str | None = None
 
     @property
+    def uses_eks_module(self) -> bool:
+        return self.target == TargetType.EKS and self.create_eks
+
+    @property
+    def module_has_scheduler(self) -> bool:
+        return self.target == TargetType.ECS
+
+    @property
     def module_prefix(self) -> str:
-        if self.target == TargetType.EKS:
+        if self.uses_eks_module:
             return "module.spacelift_eks.module.spacelift."
         return "module.spacelift."
 
     @property
     def module_output_ref(self) -> str:
-        if self.target == TargetType.EKS:
+        if self.uses_eks_module:
             return "module.spacelift_eks"
         return "module.spacelift"
