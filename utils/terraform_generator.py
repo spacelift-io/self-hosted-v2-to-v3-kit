@@ -5,6 +5,11 @@ from converters.migration_context import MigrationContext, TargetType
 import os
 import shutil
 
+EKS_MODULE_SOURCE = "github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted"
+EKS_MODULE_VERSION = "v4.2.0"
+SPACELIFT_MODULE_VERSION_FOR_ECS = "v2.2.0"
+SPACELIFT_MODULE_VERSION_FOR_EKS = "v3.2.0"
+
 
 def generate_tf_files(
     unique_suffix: Optional[str], context: MigrationContext, output_dir: str
@@ -92,8 +97,11 @@ def write_main_terraform_content(f, unique_suffix: str, context: MigrationContex
     f.write(create_terraform_provider_block(context))
     f.write(create_locals_block(context))
 
-    if context.target == TargetType.EKS:
+    if context.uses_eks_module:
         f.write(create_eks_module(unique_suffix, context))
+    elif context.target == TargetType.EKS:
+        f.write(create_spacelift_module(unique_suffix, context))
+        f.write(create_byo_eks_modules(context))
     else:
         f.write(create_spacelift_module(unique_suffix, context))
         f.write(create_spacelift_services_module(context))
@@ -136,7 +144,7 @@ def create_terraform_provider_block(context: MigrationContext) -> str:
         )
 
     random_provider = ""
-    if context.target == TargetType.EKS:
+    if context.uses_eks_module:
         random_provider = """
     random = {
       source  = "hashicorp/random"
@@ -230,14 +238,22 @@ def create_spacelift_module(unique_suffix: str, context: MigrationContext) -> st
   private_subnet_cidr_blocks = {private_subnet_cidr_blocks}
 """
 
+    mqtt_section = ""
+    scheduler_sg_name = '    scheduler   = "scheduler_sg"\n'
+    spacelift_module_version = SPACELIFT_MODULE_VERSION_FOR_ECS
+    if context.target == TargetType.EKS:
+        mqtt_section = '  mqtt_broker_type = "iotcore"\n'
+        scheduler_sg_name = ""
+        spacelift_module_version = SPACELIFT_MODULE_VERSION_FOR_EKS
+
     return f"""        
 module "spacelift" {{
-  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v2.2.0"
+  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref={spacelift_module_version}"
 
   region           = local.region
   website_endpoint = local.website_endpoint
   unique_suffix    = "{unique_suffix}"
-
+{mqtt_section}
   # Note that certain buckets have no retention rules in place. In which case their expiration_days will be set to 0.
   s3_bucket_configuration  = {{
     binaries     = {{ name = "{context.binaries_bucket_name}", expiration_days = {context.binaries_bucket_expiration_days} }}
@@ -264,8 +280,7 @@ module "spacelift" {{
   security_group_names = {{
     database    = "database_sg"
     drain       = "drain_sg"
-    scheduler   = "scheduler_sg"
-    server      = "server_sg"
+{scheduler_sg_name}    server      = "server_sg"
     vcs_gateway = "" # Mandatory, but leave it empty
   }}
         
@@ -499,7 +514,7 @@ def create_eks_module(unique_suffix: str, context: MigrationContext) -> str:
 
     return f"""
 module "spacelift_eks" {{
-  source = "github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted?ref=v3.9.0"
+  source = "{EKS_MODULE_SOURCE}?ref={EKS_MODULE_VERSION}"
 
   eks_upgrade_policy  = {{
     support_type = "STANDARD"
@@ -578,6 +593,187 @@ output "kubernetes_secrets" {{
 
 output "helm_values" {{
   value = module.spacelift_eks.helm_values
+}}
+"""
+
+
+def create_byo_eks_modules(context: MigrationContext) -> str:
+    if context.config.vpc_config and context.config.vpc_config.use_custom_vpc:
+        public_subnet_ids = format_subnet_ids(context.config.vpc_config.public_subnet_ids)
+    else:
+        public_subnet_ids = "module.spacelift.public_subnet_ids"
+
+    if context.config.is_primary_region():
+        encryption_key_arn = "aws_kms_key.encryption_primary.arn"
+    else:
+        encryption_key_arn = "aws_kms_replica_key.encryption_replica_key.arn"
+
+    return f"""
+locals {{
+  eks_cluster_name                      = "<TODO: you need to set this value>" # Name of your existing EKS cluster. Its IAM OIDC provider (IRSA) must be enabled.
+  eks_cluster_primary_security_group_id = "<TODO: you need to set this value>" # Primary security group of your existing EKS cluster.
+
+  k8s_namespace                    = "spacelift"
+  server_service_account_name      = "spacelift-server"
+  drain_service_account_name       = "spacelift-drain"
+  vcs_gateway_service_account_name = "spacelift-vcs-gateway"
+
+  sqs_queue_names = {{
+    deadletter      = aws_sqs_queue.deadletter_queue.name
+    deadletter_fifo = aws_sqs_queue.deadletter_fifo_queue.name
+    async_jobs      = aws_sqs_queue.async_jobs_queue.name
+    events_inbox    = aws_sqs_queue.events_inbox_queue.name
+    async_jobs_fifo = aws_sqs_queue.async_jobs_fifo_queue.name
+    cronjobs        = aws_sqs_queue.cronjobs_queue.name
+    webhooks        = aws_sqs_queue.webhooks_queue.name
+    iot             = aws_sqs_queue.iot_queue.name
+  }}
+
+  sqs_queue_arns = {{
+    deadletter      = aws_sqs_queue.deadletter_queue.arn
+    deadletter_fifo = aws_sqs_queue.deadletter_fifo_queue.arn
+    async_jobs      = aws_sqs_queue.async_jobs_queue.arn
+    events_inbox    = aws_sqs_queue.events_inbox_queue.arn
+    async_jobs_fifo = aws_sqs_queue.async_jobs_fifo_queue.arn
+    cronjobs        = aws_sqs_queue.cronjobs_queue.arn
+    webhooks        = aws_sqs_queue.webhooks_queue.arn
+    iot             = aws_sqs_queue.iot_queue.arn
+  }}
+}}
+
+data "aws_eks_cluster" "spacelift" {{
+  name = local.eks_cluster_name
+}}
+
+data "aws_iot_endpoint" "iot" {{
+  endpoint_type = "iot:Data-ATS"
+}}
+
+module "iam" {{
+  source = "{EKS_MODULE_SOURCE}//modules/iam?ref={EKS_MODULE_VERSION}"
+
+  unique_suffix  = module.spacelift.unique_suffix
+  aws_account_id = data.aws_caller_identity.current.account_id
+  aws_partition  = data.aws_partition.current.partition
+
+  kms_key_arn            = module.spacelift.kms_key_arn
+  kms_encryption_key_arn = {encryption_key_arn}
+  kms_signing_key_arn    = aws_kms_key.jwt.arn
+
+  deliveries_bucket_name               = module.spacelift.deliveries_bucket_name
+  large_queue_messages_bucket_name     = module.spacelift.large_queue_messages_bucket_name
+  metadata_bucket_name                 = module.spacelift.metadata_bucket_name
+  modules_bucket_name                  = module.spacelift.modules_bucket_name
+  policy_inputs_bucket_name            = module.spacelift.policy_inputs_bucket_name
+  run_logs_bucket_name                 = module.spacelift.run_logs_bucket_name
+  run_observability_bucket_name        = module.spacelift.run_observability_bucket_name
+  states_bucket_name                   = module.spacelift.states_bucket_name
+  uploads_bucket_name                  = module.spacelift.uploads_bucket_name
+  user_uploaded_workspaces_bucket_name = module.spacelift.user_uploaded_workspaces_bucket_name
+  workspace_bucket_name                = module.spacelift.workspace_bucket_name
+
+  mqtt_broker_type = "iotcore"
+
+  create_sqs = false
+  queue_arns = local.sqs_queue_arns
+
+  oidc_provider                    = replace(data.aws_eks_cluster.spacelift.identity[0].oidc[0].issuer, "https://", "")
+  namespace                        = local.k8s_namespace
+  server_service_account_name      = local.server_service_account_name
+  drain_service_account_name       = local.drain_service_account_name
+  vcs_gateway_service_account_name = local.vcs_gateway_service_account_name
+}}
+
+module "kube_outputs" {{
+  source = "{EKS_MODULE_SOURCE}//modules/kube-outputs?ref={EKS_MODULE_VERSION}"
+
+  aws_region        = local.region
+  k8s_namespace     = local.k8s_namespace
+  server_domain     = local.website_domain
+  license_token     = local.license_token
+  spacelift_version = local.spacelift_version
+
+  encryption_type        = "kms"
+  kms_encryption_key_arn = {encryption_key_arn}
+  kms_signing_key_arn    = aws_kms_key.jwt.arn
+
+  mqtt_broker_type     = "iotcore"
+  mqtt_broker_endpoint = data.aws_iot_endpoint.iot.endpoint_address
+
+  deliveries_bucket_name               = module.spacelift.deliveries_bucket_name
+  large_queue_messages_bucket_name     = module.spacelift.large_queue_messages_bucket_name
+  metadata_bucket_name                 = module.spacelift.metadata_bucket_name
+  modules_bucket_name                  = module.spacelift.modules_bucket_name
+  policy_inputs_bucket_name            = module.spacelift.policy_inputs_bucket_name
+  run_logs_bucket_name                 = module.spacelift.run_logs_bucket_name
+  run_observability_bucket_name        = module.spacelift.run_observability_bucket_name
+  states_bucket_name                   = module.spacelift.states_bucket_name
+  uploads_bucket_name                  = module.spacelift.uploads_bucket_name
+  uploads_bucket_url                   = module.spacelift.uploads_bucket_url
+  user_uploaded_workspaces_bucket_name = module.spacelift.user_uploaded_workspaces_bucket_name
+  workspace_bucket_name                = module.spacelift.workspace_bucket_name
+
+  create_sqs               = false
+  sqs_queue_names_override = local.sqs_queue_names
+
+  database_url           = module.spacelift.database_url
+  database_read_only_url = module.spacelift.database_read_only_url
+
+  ecr_backend_repository_url  = module.spacelift.ecr_backend_repository_url
+  ecr_launcher_repository_url = module.spacelift.ecr_launcher_repository_url
+
+  public_subnet_ids = {public_subnet_ids}
+  server_acm_arn    = "<TODO: you need to set this value>" # ACM certificate ARN for the server domain
+
+  server_service_account_name      = local.server_service_account_name
+  drain_service_account_name       = local.drain_service_account_name
+  vcs_gateway_service_account_name = local.vcs_gateway_service_account_name
+  server_role_arn                  = module.iam.server_role_arn
+  drain_role_arn                   = module.iam.drain_role_arn
+  vcs_gateway_role_arn             = module.iam.vcs_gateway_role_arn
+}}
+
+# Allow the nodes of your EKS cluster to access the database.
+# Remove this if the cluster is already allowed to reach it (e.g. it shares the database security group).
+resource "aws_vpc_security_group_ingress_rule" "cluster_database_ingress_rule" {{
+  count = length(coalesce(module.spacelift.database_security_group_ids, []))
+
+  security_group_id = module.spacelift.database_security_group_ids[count.index]
+
+  description                  = "Only accept TCP connections on appropriate port from EKS cluster nodes"
+  from_port                    = 5432
+  to_port                      = 5432
+  ip_protocol                  = "tcp"
+  referenced_security_group_id = local.eks_cluster_primary_security_group_id
+}}
+
+output "shell" {{
+  sensitive = true
+  value     = <<-EOT
+    export AWS_ACCOUNT_ID=${{data.aws_caller_identity.current.account_id}}
+    export AWS_REGION=${{local.region}}
+    export SERVER_DOMAIN=${{local.website_domain}}
+    export SPACELIFT_VERSION=${{local.spacelift_version}}
+    export PRIVATE_ECR_LOGIN_URL=${{split("/", module.spacelift.ecr_backend_repository_url)[0]}}
+    export BACKEND_IMAGE=${{module.spacelift.ecr_backend_repository_url}}
+    export LAUNCHER_IMAGE=${{module.spacelift.ecr_launcher_repository_url}}
+    export BINARIES_BUCKET_NAME=${{module.spacelift.binaries_bucket_name}}
+    export EKS_CLUSTER_NAME=${{local.eks_cluster_name}}
+    export K8S_NAMESPACE=${{local.k8s_namespace}}
+  EOT
+}}
+
+output "kubernetes_ingress_class" {{
+  value = module.kube_outputs.kubernetes_ingress_class
+}}
+
+output "kubernetes_secrets" {{
+  sensitive = true
+  value     = module.kube_outputs.kubernetes_secrets
+}}
+
+output "helm_values" {{
+  value = module.kube_outputs.helm_values
 }}
 """
 

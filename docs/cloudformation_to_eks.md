@@ -4,6 +4,11 @@ This guide walks you through migrating a Spacelift Self-Hosted V2 (CloudFormatio
 
 The EKS module ([terraform-aws-eks-spacelift-selfhosted](https://github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted)) bundles all base infrastructure (VPC, S3, RDS, ECR) together with the EKS cluster, IAM roles (IRSA), and Helm value generation into a single module. This is different from the ECS path where base infra and services are two separate modules.
 
+> [!IMPORTANT]
+> The EKS module version used here (v4.x) requires Spacelift Self-Hosted **v6.4.0 or newer**, the first release where the `drain` service always runs the scheduler. The standalone `scheduler` service no longer exists.
+
+By default a new EKS cluster is created. If you already have an EKS cluster you want to deploy Spacelift to, pass `--no-create-eks` (see [Bringing your own EKS cluster](#bringing-your-own-eks-cluster)).
+
 ## Installation
 
 ```bash
@@ -39,6 +44,7 @@ python main.py --config "<sh-v2-config-file-path.json>" --target-module eks
 Additional arguments:
 - `--profile`: AWS profile to use (optional)
 - `--output`: Output directory path for the Terraform project (default: `dist`)
+- `--create-eks` / `--no-create-eks`: Create a new EKS cluster (default), or bring your own existing cluster. See [Bringing your own EKS cluster](#bringing-your-own-eks-cluster).
 
 The script will:
 1. Scan for all relevant AWS resources in your current Spacelift deployment
@@ -62,7 +68,30 @@ python <output-folder>/internet_gateway_refactor.py [--profile AWS_PROFILE (opti
 After generation, open `main.tf` in the output directory and fill in the following values:
 
 - `local.license_token` - set this to the license token you received from Spacelift.
-- `server_acm_arn` in the `module "spacelift_eks"` block - set this to the ARN of your ACM certificate for the Spacelift server domain. You can reuse the same certificate from your existing V2 load balancer (`load_balancer.certificate_arn` in your V2 config file).
+- `server_acm_arn` in the `module "spacelift_eks"` block (or in the `module "kube_outputs"` block if bringing your own cluster) - set this to the ARN of your ACM certificate for the Spacelift server domain. You can reuse the same certificate from your existing V2 load balancer (`load_balancer.certificate_arn` in your V2 config file).
+
+#### Bringing your own EKS cluster
+
+Use this path if you want Spacelift to run on an EKS cluster you already manage:
+
+```bash
+python main.py --config "<sh-v2-config-file-path.json>" --target-module eks --no-create-eks
+```
+
+Instead of the single `module "spacelift_eks"` block, the generated `main.tf` uses the base `module "spacelift"` (VPC, S3, RDS, ECR), plus `module "iam"` (IRSA roles) and `module "kube_outputs"` (IngressClass, K8s secrets and Helm values). No cluster resources are created.
+
+Prerequisites on your existing cluster:
+- The cluster has an IAM OIDC provider associated with it (IRSA enabled).
+- It can provision an ALB through an `IngressClass` (EKS Auto Mode, or the AWS Load Balancer Controller).
+- Its nodes can reach the Spacelift database (network path between the cluster VPC and the Spacelift VPC).
+
+In addition to the values listed below, fill in these `locals` in `main.tf`:
+- `local.eks_cluster_name` - the name of your existing EKS cluster. It's used to look up the cluster's OIDC issuer for the IAM roles, so `tofu plan` fails until it's set.
+- `local.eks_cluster_primary_security_group_id` - the primary security group of your cluster. It's used to allow the cluster nodes to reach the database. Delete the `cluster_database_ingress_rule` resource if the cluster can already reach the database through other means.
+
+The `shell`, `kubernetes_ingress_class`, `kubernetes_secrets` and `helm_values` outputs are the same as in the new-cluster path, so the remaining steps apply unchanged, except that:
+- Step 2 only creates AWS resources, not the EKS cluster.
+- In Step 4, `EKS_CLUSTER_NAME` refers to your own cluster, and you may skip creating the namespace if you already have one called `spacelift` (the namespace is configurable via `local.k8s_namespace`).
 
 ### Step 2: Apply the Generated Terraform Code
 
@@ -75,7 +104,7 @@ tofu init
 tofu plan -out=plan
 ```
 
-Review the plan carefully. It should include 100+ resource imports, some in-place changes (mostly tags), and creation of the EKS cluster and its associated resources. Watch out for any `replaced` or `destroy` actions on stateful resources like RDS and S3.
+Review the plan carefully. It should include 100+ resource imports, some in-place changes (mostly tags), and creation of the EKS cluster and its associated resources, as well as the new `run-observability` S3 bucket. Watch out for any `replaced` or `destroy` actions on stateful resources like RDS and S3.
 
 ```bash
 tofu apply plan
@@ -200,7 +229,7 @@ Update your `CNAME` record to point your Spacelift domain to the ingress `ADDRES
 
 Since your V2 installation uses AWS IoT Core as the MQTT broker, external workers will continue to connect through IoT Core and no additional MQTT DNS setup is needed.
 
-To verify the traffic is properly routed, you can scale down the old ECS cluster's `server` service to 0 tasks. If you confirmed that the new `drain` and `scheduler` services are up and running (the services are stable, the logs look good), scale down the old `drain` and `scheduler` services as well.
+To verify the traffic is properly routed, you can scale down the old ECS cluster's `server` service to 0 tasks. If you confirmed that the new `drain` service is up and running (the service is stable, the logs look good), scale down the old `drain` and `scheduler` services as well. The scheduler now runs inside `drain`, so there is no separate scheduler service in the new deployment.
 
 In case you're experiencing issues, you can revert the DNS change and scale up the old ECS cluster's services.
 
@@ -231,5 +260,6 @@ The following resources are retained by the CloudFormation stacks but **not** ma
   - There's access logging enabled for all 11 buckets. If you delete the BucketLogsBucket, make sure to manually remove the access logging configuration from these buckets as well. The setting can be found in the AWS console under the **Properties** tab of the bucket, under **Server access logging**.
 - `XrayECRRepository` ECR repository - XRay is not part of the Terraform-managed deployment by default. CloudFormation can't delete the repository as it's not empty, so you can either delete it manually or leave it as is.
 - `BastionSecurityGroup` security group - bastion host is not part of the Terraform-managed deployment. If you use a bastion host, add it to your Terraform project and `import` it. Otherwise, you can manually delete it.
+- `SchedulerSecurityGroup` security group - the scheduler now runs inside the drain service, so the Terraform module no longer has a scheduler security group. CloudFormation can't delete it because the database security group has an inbound rule referencing it. Once you no longer need it, delete the database security group's inbound rule ("from the scheduler") and then the security group itself.
 - `InstallationTaskSecurityGroup` security group - this was used for the installation task, which no longer exists in Terraform-managed deployments. CloudFormation can't delete it because the database security group's inbound rules reference it. You can manually clean it up.
 - SecretsManager secrets - once their values have been migrated to K8s secrets (see Step 4), the following can be safely removed: `spacelift/slack-application`, `spacelift/additional-root-ca-certificates`, `spacelift/external`, `spacelift/saml-credentials`, `DBMasterCredentials-*`. **Do not** delete `spacelift/db-password` as it is referenced by the RDS cluster resource itself. Similarly, `spacelift/db-conn-string` is created by the underlying Terraform module so refrain from deleting it as well.

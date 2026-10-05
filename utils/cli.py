@@ -30,4 +30,14 @@ def parse_args() -> argparse.Namespace:
         choices=["ecs", "eks"],
         help="Target Terraform module type (default: ecs)",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--create-eks",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Create a new EKS cluster, or use --no-create-eks to bring your own "
+        "(only applies to --target-module eks, default: create)",
+    )
+    args = parser.parse_args()
+    if not args.create_eks and args.target_module != "eks":
+        parser.error("--no-create-eks can only be used with --target-module eks")
+    return args

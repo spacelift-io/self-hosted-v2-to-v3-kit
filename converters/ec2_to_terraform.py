@@ -271,7 +271,8 @@ class EC2Terraformer(Terraformer):
     ):
         for tag in tags:
             if (
-                tag["Key"] == "aws:cloudformation:logical-id"
+                self.migration_context.module_has_scheduler
+                and tag["Key"] == "aws:cloudformation:logical-id"
                 and tag["Value"] == "SchedulerSecurityGroup"
             ):
                 self.process(
@@ -336,7 +337,11 @@ class EC2Terraformer(Terraformer):
                             self.database_server_ingress_rule_resource_name,
                             rule["SecurityGroupRuleId"],
                         )
-                    if rule["IsEgress"] == False and "from the scheduler" in rule["Description"]:
+                    if (
+                        self.migration_context.module_has_scheduler
+                        and rule["IsEgress"] == False
+                        and "from the scheduler" in rule["Description"]
+                    ):
                         self.process(
                             self.database_scheduler_ingress_rule_resource_name,
                             rule["SecurityGroupRuleId"],
