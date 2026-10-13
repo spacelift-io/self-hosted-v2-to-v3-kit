@@ -201,7 +201,7 @@ Navigate to the output directory and follow these steps:
 10. Redirect traffic:
    - Update your `CNAME` record to point to the new load balancer DNS name (available as an output)
    - To make sure the traffic is properly routed, you can scale down the old ECS cluster's `server` service to 0 tasks
-   - If you confirmed that the new `drain` and `scheduler` services are up and running (the services are stable, the logs look good), scale down the old `drain` and `scheduler` services as well
+   - If you confirmed that the new `drain` service is up and running (the service is stable, the logs look good), scale down the old `drain` and `scheduler` services as well. Newer Terraform-based deployments have no standalone `scheduler` service, the cron scheduler runs inside the drain service.
 
    In case you're experiencing issues, you can just revert the DNS change and scale up the old ECS cluster's services.
 
@@ -228,7 +228,8 @@ Navigate to the output directory and follow these steps:
   - `BootstrapBucket` S3 bucket - this isn't used in V3 anymore. *Cloudformation can't delete the bucket as it's not empty, so you'll need to purge the bucket, then remove it.*
   - `AccessLogsBucket` S3 bucket - this isn't used in V3 anymore. You're free to set up access logging for the load balancer yourself, but the Terraform modules don't do that by default.
   - `BucketLogsBucket` S3 bucket - this isn't used in V3 anymore. You're free to set up access logging for S3 yourself, but the Terraform modules don't do that by default. *Cloudformation can't delete the bucket as it's not empty, so you can either delete it manually or leave it as is.*
-    - There's access logging enabled for all 11 buckets. If you delete the BucketLogsBucket, make sure to manually remove the access logging configuration from these buckets as well. The setting can be found in the AWS console under the **Properties** tab of the bucket, under **Server access logging** section.
+    - There's access logging enabled for all of the application buckets (12 of them). If you delete the BucketLogsBucket, make sure to manually remove the access logging configuration from these buckets as well. The setting can be found in the AWS console under the **Properties** tab of the bucket, under **Server access logging** section.
   - `XrayECRRepository` ECR repository - XRay is not part of the V3 ECS deployment by default. You can add it yourself if you want to keep using it, but the Terraform modules don't do that by default. *Cloudformation can't delete the repository as it's not empty, so you can either delete it manually or leave it as is.*
   - `BastionSecurityGroup` security group - bastion host is not part of the V3 ECS deployment by default. If you use a bastion host, ideally you should add it to your Terraform project and then `import` it. If you don't use a bastion host, you can manually delete it.
   - `InstallationTaskSecurityGroup` security group - this was used for the installation task, which is not part of the V3 ECS infrastructure anymore. Cloudformation can't delete it because the database security group's inbound rules reference it. You can manually clean it up.
+  - `SchedulerSecurityGroup` security group - newer Terraform-based deployments (Self-Hosted v6.4.1 and above) have no standalone `scheduler` service, the cron scheduler runs inside the drain service, so this isn't used anymore. Cloudformation can't delete it because the database security group's inbound rules reference it. Remove the `from the scheduler` inbound rule from the database security group, then delete the security group.

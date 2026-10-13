@@ -98,6 +98,7 @@ class S3BucketReplicationConfig:
     replica_kms_key_arn: Optional[str] = None
     states_bucket_arn: Optional[str] = None
     run_logs_bucket_arn: Optional[str] = None
+    run_observability_bucket_arn: Optional[str] = None
     modules_bucket_arn: Optional[str] = None
     policy_inputs_bucket_arn: Optional[str] = None
     workspaces_bucket_arn: Optional[str] = None
@@ -119,6 +120,7 @@ class AlertingConfig:
 @dataclass
 class S3Config:
     run_logs_expiration_days: Optional[int] = None
+    run_observability_expiration_days: Optional[int] = None
     deliveries_bucket_expiration_days: Optional[int] = None
     large_queue_messages_bucket_expiration_days: Optional[int] = None
     metadata_bucket_expiration_days: Optional[int] = None
@@ -150,6 +152,9 @@ class AppConfig:
     s3_config: Optional[S3Config] = None
     automatically_report_usage_data: Optional[bool] = None
     webhooks_endpoint: Optional[str] = None
+    services: Optional[dict] = None
+    features: Optional[dict] = None
+    federation_config: Optional[dict] = None
 
     def is_primary_region(self) -> bool:
         return not (self.disaster_recovery and self.disaster_recovery.is_dr_instance)
