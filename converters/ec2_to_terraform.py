@@ -85,11 +85,6 @@ class EC2Terraformer(Terraformer):
         )
 
         # Security Groups
-        self.scheduler_sg_resource_name = (
-            f"{self.module_prefix}module.network[0].aws_security_group.scheduler_sg"
-        )
-        self.scheduler_sg_egress_rule_resource_name = f"{self.module_prefix}module.network[0].aws_vpc_security_group_egress_rule.scheduler_sg_egress_rule"
-
         self.drain_sg_resource_name = (
             f"{self.module_prefix}module.network[0].aws_security_group.drain_sg"
         )
@@ -105,7 +100,6 @@ class EC2Terraformer(Terraformer):
         )
         self.database_drain_ingress_rule_resource_name = f"{self.module_prefix}module.network[0].aws_vpc_security_group_ingress_rule.database_drain_ingress_rule[0]"
         self.database_server_ingress_rule_resource_name = f"{self.module_prefix}module.network[0].aws_vpc_security_group_ingress_rule.database_server_ingress_rule[0]"
-        self.database_scheduler_ingress_rule_resource_name = f"{self.module_prefix}module.network[0].aws_vpc_security_group_ingress_rule.database_scheduler_ingress_rule[0]"
 
     def uses_custom_vpc(self) -> bool:
         return (
@@ -272,20 +266,6 @@ class EC2Terraformer(Terraformer):
         for tag in tags:
             if (
                 tag["Key"] == "aws:cloudformation:logical-id"
-                and tag["Value"] == "SchedulerSecurityGroup"
-            ):
-                self.process(
-                    self.scheduler_sg_resource_name,
-                    security_group_id,
-                )
-                for rule in rules:
-                    if rule["IsEgress"] == True:
-                        self.process(
-                            self.scheduler_sg_egress_rule_resource_name,
-                            rule["SecurityGroupRuleId"],
-                        )
-            if (
-                tag["Key"] == "aws:cloudformation:logical-id"
                 and tag["Value"] == "DrainSecurityGroup"
             ):
                 self.process(
@@ -334,10 +314,5 @@ class EC2Terraformer(Terraformer):
                     if rule["IsEgress"] == False and "from the server" in rule["Description"]:
                         self.process(
                             self.database_server_ingress_rule_resource_name,
-                            rule["SecurityGroupRuleId"],
-                        )
-                    if rule["IsEgress"] == False and "from the scheduler" in rule["Description"]:
-                        self.process(
-                            self.database_scheduler_ingress_rule_resource_name,
                             rule["SecurityGroupRuleId"],
                         )

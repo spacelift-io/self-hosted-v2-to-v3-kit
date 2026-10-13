@@ -190,6 +190,11 @@ def get_db_password_arn(context: MigrationContext) -> str:
     if context.config.uses_custom_database_connection_string():
         # Use the custom connection string ARN from config
         return f'"{context.config.database.connection_string_ssm_arn}"'
+    elif context.db_pw_secret_arn:
+        # A literal ARN instead of a resource reference: the module reads the master username
+        # from this secret, and depending on the (just imported) secret resource would defer
+        # that read to apply time, making the username unknown and forcing a cluster replacement.
+        return f'"{context.db_pw_secret_arn}"'
     else:
         # Use the default created secret
         return "aws_secretsmanager_secret.db_pw.arn"
@@ -232,7 +237,7 @@ def create_spacelift_module(unique_suffix: str, context: MigrationContext) -> st
 
     return f"""        
 module "spacelift" {{
-  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v2.2.0"
+  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v3.3.0"
 
   region           = local.region
   website_endpoint = local.website_endpoint
@@ -251,7 +256,9 @@ module "spacelift" {{
     uploads      = {{ name = "{context.uploads_bucket_name}", expiration_days = {context.uploads_bucket_expiration_days} }}
     user_uploads = {{ name = "{context.user_uploads_bucket_name}", expiration_days = {context.user_uploads_bucket_expiration_days} }}
     workspace    = {{ name = "{context.workspace_bucket_name}", expiration_days = {context.workspace_bucket_expiration_days} }}
+    run_observability = {{ name = "{context.run_observability_bucket_name}", expiration_days = {context.run_observability_bucket_expiration_days} }}
   }}
+  s3_noncurrent_version_expiration_days = 1
 
   kms_arn                       = aws_kms_key.master.arn
   kms_master_key_multi_regional = false
@@ -264,7 +271,6 @@ module "spacelift" {{
   security_group_names = {{
     database    = "database_sg"
     drain       = "drain_sg"
-    scheduler   = "scheduler_sg"
     server      = "server_sg"
     vcs_gateway = "" # Mandatory, but leave it empty
   }}
@@ -282,7 +288,6 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #  server_lb_subnets           = {format_subnet_ids(context.config.vpc_config.public_subnet_ids)}
 #  server_security_group_id    = "{context.config.vpc_config.server_security_group_id}"
 #  drain_security_group_id     = "{context.config.vpc_config.drain_security_group_id}"
-#  scheduler_security_group_id = "{context.config.vpc_config.scheduler_security_group_id}"
 """.lstrip()
     else:
         vpc_config = """
@@ -293,13 +298,11 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #  server_security_group_id    = module.spacelift.server_security_group_id
 #  
 #  drain_security_group_id     = module.spacelift.drain_security_group_id
-#  scheduler_security_group_id = module.spacelift.scheduler_security_group_id
 """.lstrip()
     ecs_service_desired_count = ""
     if not context.config.is_primary_region():
         ecs_service_desired_count = """
 #  drain_desired_count = 0
-#  scheduler_desired_count = 0
 #  server_desired_count = 0
         """.strip()
 
@@ -338,7 +341,7 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
     return f"""
 # Uncomment after the above module applied successfully
 #module "spacelift_services" {{
-#  source = "github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted?ref=v2.5.0"
+#  source = "github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted?ref=v3.1.0"
 #  
 #  region               = local.region
 #  unique_suffix        = module.spacelift.unique_suffix
@@ -411,18 +414,6 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #    }}
 #  }}
 #
-#  scheduler_log_configuration = {{
-#    logDriver : "awslogs",
-#    options : {{
-#      "awslogs-region": local.region,
-#      "awslogs-group": "/ecs/spacelift-scheduler",
-#      "awslogs-create-group": "true",
-#      "awslogs-stream-prefix": "scheduler"
-#      "mode": "non-blocking"
-#      "max-buffer-size": "25m"
-#    }}
-#  }}
-#
 {ecs_service_desired_count}
 {vpc_config}
 #  server_lb_certificate_arn   = "{context.config.load_balancer.certificate_arn}"
@@ -435,6 +426,7 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 #  modules_bucket_name                  = module.spacelift.modules_bucket_name
 #  policy_inputs_bucket_name            = module.spacelift.policy_inputs_bucket_name
 #  run_logs_bucket_name                 = module.spacelift.run_logs_bucket_name
+#  run_observability_bucket_name        = module.spacelift.run_observability_bucket_name
 #  states_bucket_name                   = module.spacelift.states_bucket_name
 #  uploads_bucket_name                  = module.spacelift.uploads_bucket_name
 #  uploads_bucket_url                   = module.spacelift.uploads_bucket_url
@@ -499,7 +491,7 @@ def create_eks_module(unique_suffix: str, context: MigrationContext) -> str:
 
     return f"""
 module "spacelift_eks" {{
-  source = "github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted?ref=v3.9.0"
+  source = "github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted?ref=v4.3.0"
 
   eks_upgrade_policy  = {{
     support_type = "STANDARD"
@@ -527,6 +519,7 @@ module "spacelift_eks" {{
     uploads      = {{ name = "{context.uploads_bucket_name}", expiration_days = {context.uploads_bucket_expiration_days} }}
     user_uploads = {{ name = "{context.user_uploads_bucket_name}", expiration_days = {context.user_uploads_bucket_expiration_days} }}
     workspace    = {{ name = "{context.workspace_bucket_name}", expiration_days = {context.workspace_bucket_expiration_days} }}
+    run_observability = {{ name = "{context.run_observability_bucket_name}", expiration_days = {context.run_observability_bucket_expiration_days} }}
   }}
 {vpc_config}
   number_of_images_to_retain   = 10
@@ -536,7 +529,6 @@ module "spacelift_eks" {{
   security_group_names = {{
     database  = "database_sg"
     drain     = "drain_sg"
-    scheduler = "scheduler_sg"
     server    = "server_sg"
     vcs_gateway = "" # Mandatory, but leave it empty
   }}
@@ -881,6 +873,30 @@ resource "aws_sqs_queue" "iot_queue" {
 
 
 def write_s3_replication_terraform_content(f, context: MigrationContext) -> None:
+    run_observability_source_arns = ""
+    run_observability_source_objects = ""
+    run_observability_replica_objects = ""
+    run_observability_replica_objects_nested = ""
+    run_observability_replication = ""
+    if context.s3_run_observability_bucket_replica_arn:
+        source_arn = f"{context.module_output_ref}.run_observability_bucket_arn"
+        replica_arn = context.s3_run_observability_bucket_replica_arn
+        run_observability_source_arns = f"""
+          {source_arn},
+          "${{{source_arn}}}/*","""
+        run_observability_source_objects = f"""
+              "${{{source_arn}}}/*","""
+        run_observability_replica_objects = f"""
+          "{replica_arn}/*","""
+        run_observability_replica_objects_nested = f"""
+              "{replica_arn}/*","""
+        run_observability_replication = generate_s3_replication_bucket_resource(
+            "run_observability",
+            f"{context.module_output_ref}.run_observability_bucket_name",
+            replica_arn,
+            context.s3_replica_region_key_kms_arn,
+        )
+
     f.write(f"""
 locals {{
   replication_region_name        = "{context.s3_replica_region_name}"
@@ -927,7 +943,7 @@ resource "aws_iam_policy" "s3_replication_policy" {{
           {context.module_output_ref}.states_bucket_arn,
           "${{{context.module_output_ref}.states_bucket_arn}}/*",
           {context.module_output_ref}.run_logs_bucket_arn,
-          "${{{context.module_output_ref}.run_logs_bucket_arn}}/*",
+          "${{{context.module_output_ref}.run_logs_bucket_arn}}/*",{run_observability_source_arns}
           {context.module_output_ref}.modules_bucket_arn,
           "${{{context.module_output_ref}.modules_bucket_arn}}/*",
           {context.module_output_ref}.policy_inputs_bucket_arn,
@@ -953,7 +969,7 @@ resource "aws_iam_policy" "s3_replication_policy" {{
         }},
         Resource = [
           "{context.s3_states_bucket_replica_arn}/*",
-          "{context.s3_run_logs_bucket_replica_arn}/*",
+          "{context.s3_run_logs_bucket_replica_arn}/*",{run_observability_replica_objects}
           "{context.s3_modules_bucket_replica_arn}/*",
           "{context.s3_policy_input_bucket_replica_arn}/*",
           "{context.s3_workspace_bucket_replica_arn}/*",
@@ -969,7 +985,7 @@ resource "aws_iam_policy" "s3_replication_policy" {{
             "kms:ViaService"                   = "s3.${{local.region}}.amazonaws.com",
             "kms:EncryptionContext:aws:s3:arn" = [
               "${{{context.module_output_ref}.states_bucket_arn}}/*",
-              "${{{context.module_output_ref}.run_logs_bucket_arn}}/*",
+              "${{{context.module_output_ref}.run_logs_bucket_arn}}/*",{run_observability_source_objects}
               "${{{context.module_output_ref}.modules_bucket_arn}}/*",
               "${{{context.module_output_ref}.policy_inputs_bucket_arn}}/*",
               "${{{context.module_output_ref}.workspace_bucket_arn}}/*"
@@ -988,7 +1004,7 @@ resource "aws_iam_policy" "s3_replication_policy" {{
             "kms:ViaService"                   = "s3.${{local.replication_region_name}}.amazonaws.com",
             "kms:EncryptionContext:aws:s3:arn" = [
               "{context.s3_states_bucket_replica_arn}/*",
-              "{context.s3_run_logs_bucket_replica_arn}/*",
+              "{context.s3_run_logs_bucket_replica_arn}/*",{run_observability_replica_objects_nested}
               "{context.s3_modules_bucket_replica_arn}/*",
               "{context.s3_policy_input_bucket_replica_arn}/*",
               "{context.s3_workspace_bucket_replica_arn}/*",
@@ -1009,7 +1025,7 @@ resource "aws_iam_role_policy_attachment" "s3_replication_attachment" {{
 {generate_s3_replication_bucket_resource("states", f"{context.module_output_ref}.states_bucket_name", context.s3_states_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
 
 {generate_s3_replication_bucket_resource("run_logs", f"{context.module_output_ref}.run_logs_bucket_name", context.s3_run_logs_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
-
+{run_observability_replication}
 {generate_s3_replication_bucket_resource("modules", f"{context.module_output_ref}.modules_bucket_name", context.s3_modules_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}
 
 {generate_s3_replication_bucket_resource("policy_inputs", f"{context.module_output_ref}.policy_inputs_bucket_name", context.s3_policy_input_bucket_replica_arn, context.s3_replica_region_key_kms_arn)}

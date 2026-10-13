@@ -93,6 +93,23 @@ class S3Terraformer(Terraformer):
             "aws_s3_bucket_replication_configuration.run_logs"
         )
 
+        self.run_observability_resource_name = (
+            f"{self.module_prefix}module.s3.aws_s3_bucket.run_observability"
+        )
+        self.run_observability_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.run_observability"
+        self.run_observability_versioning_resource_name = (
+            f"{self.module_prefix}module.s3.aws_s3_bucket_versioning.run_observability"
+        )
+        self.run_observability_lifecycle_resource_name = (
+            f"{self.module_prefix}module.s3.aws_s3_bucket_lifecycle_configuration.run_observability"
+        )
+        self.run_observability_public_access_resource_name = (
+            f"{self.module_prefix}module.s3.aws_s3_bucket_public_access_block.run_observability[0]"
+        )
+        self.run_observability_bucket_replication_resource_name = (
+            "aws_s3_bucket_replication_configuration.run_observability"
+        )
+
         self.states_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket.states"
         self.states_encryption_resource_name = f"{self.module_prefix}module.s3.aws_s3_bucket_server_side_encryption_configuration.states"
         self.states_versioning_resource_name = (
@@ -266,6 +283,27 @@ class S3Terraformer(Terraformer):
                 )
                 self.process(
                     self.run_logs_bucket_replication_resource_name,
+                    bucketName,
+                )
+
+        elif "run-observability" in bucketName:
+            self.migration_context.run_observability_bucket_name = bucketName
+            self.migration_context.run_observability_bucket_expiration_days = bucketExpirationDays
+            self.process(self.run_observability_resource_name, bucketName)
+            if versioning_enabled:
+                self.process(self.run_observability_versioning_resource_name, bucketName)
+            if sse_enabled:
+                self.process(self.run_observability_encryption_resource_name, bucketName)
+            if lifecycle_enabled:
+                self.process(self.run_observability_lifecycle_resource_name, bucketName)
+            if public_access_blocked:
+                self.process(self.run_observability_public_access_resource_name, bucketName)
+            if bucket_replication_rules:
+                self.migration_context.s3_run_observability_bucket_replica_arn = (
+                    bucket_replication_rules[0].get("Destination", {}).get("Bucket")
+                )
+                self.process(
+                    self.run_observability_bucket_replication_resource_name,
                     bucketName,
                 )
 

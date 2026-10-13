@@ -23,6 +23,7 @@ class MigrationContext:
         self.modules_bucket_name: str | None = None
         self.policy_bucket_name: str | None = None
         self.run_logs_bucket_name: str | None = None
+        self.run_observability_bucket_name: str | None = None
         self.states_bucket_name: str | None = None
         self.uploads_bucket_name: str | None = None
         self.user_uploads_bucket_name: str | None = None
@@ -36,6 +37,7 @@ class MigrationContext:
         self.modules_bucket_expiration_days: str | None = None
         self.policy_bucket_expiration_days: str | None = None
         self.run_logs_bucket_expiration_days: str | None = None
+        self.run_observability_bucket_expiration_days: str | None = None
         self.states_bucket_expiration_days: str | None = None
         self.uploads_bucket_expiration_days: str | None = None
         self.user_uploads_bucket_expiration_days: str | None = None
@@ -48,6 +50,7 @@ class MigrationContext:
         self.s3_replica_region_key_kms_arn: str | None = None
         self.s3_states_bucket_replica_arn: str | None = None
         self.s3_run_logs_bucket_replica_arn: str | None = None
+        self.s3_run_observability_bucket_replica_arn: str | None = None
         self.s3_modules_bucket_replica_arn: str | None = None
         self.s3_policy_input_bucket_replica_arn: str | None = None
         self.s3_workspace_bucket_replica_arn: str | None = None
@@ -69,6 +72,7 @@ class MigrationContext:
         self.gateway3_route_table_id: str | None = None
 
         # RDS configuration
+        self.db_pw_secret_arn: str | None = None
         self.rds_engine_version: str | None = None
         self.rds_preferred_backup_window: str | None = None
         self.rds_instance_identifier: str | None = None

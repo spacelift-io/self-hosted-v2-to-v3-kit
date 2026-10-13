@@ -370,7 +370,7 @@ def delete_stacks(region: str, profile: Optional[str] = None) -> None:
                 "PrivateSubnet1",
                 "PrivateSubnet2",
                 "PrivateSubnet3",
-                "SchedulerSecurityGroup",
+                "SchedulerSecurityGroup",  # Can't be deleted since the database security group references it. Needs to be deleted manually.
                 "ServerSecurityGroup",
                 "VPC",
             ],
@@ -388,6 +388,7 @@ def delete_stacks(region: str, profile: Optional[str] = None) -> None:
                 "ModulesBucket",
                 "PolicyInputsBucket",
                 "RunLogsBucket",
+                "RunObservabilityBucket",
                 "S3ReplicationPolicy",
                 "S3ReplicationRole",
                 "StatesBucket",

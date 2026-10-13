@@ -33,6 +33,7 @@ Key features:
 | >= 2.6.0          | 1.1.0                 | 2.1.1                                                                                      | 2.1.0                                                                                    |
 | >= 2.6.0          | 2.0.0                 | 2.1.1                                                                                      | 2.1.0                                                                                    |
 | >= 6.0.0          | 2.1.0                 | 2.2.0                                                                                      | 2.5.0                                                                                    |
+| >= 6.4.1          | 3.0.0                 | 3.3.0                                                                                      | 3.1.0                                                                                    |
 
 ### EKS
 
@@ -40,10 +41,11 @@ Key features:
 | ----------------- | --------------------- | ---------------------------------------------------------------------------------------- |
 | >= 4.0.0          | 2.0.0                 | 3.4.0                                                                                    |
 | >= 6.0.0          | 2.1.0                 | 3.9.0                                                                                    |
+| >= 6.4.1          | 3.0.0                 | 4.3.0                                                                                    |
 
 ## 📦 Requirements
 
-- At least Self-hosted v2.6.0 installed
+- At least Self-hosted v6.4.1 installed. Older versions can use an earlier version of the migration kit (see the compatibility matrix above).
 - Python 3.8+
 - AWS credentials with appropriate permissions
   - read access for the Python script (`main.py`) that scans the existing resources

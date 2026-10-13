@@ -24,6 +24,7 @@ def scan_s3_resources(
             "ModulesBucket",
             "PolicyInputsBucket",
             "RunLogsBucket",
+            "RunObservabilityBucket",
             "StatesBucket",
             "UploadsBucket",
             "UserUploadedWorkspacesBucket",
@@ -55,6 +56,12 @@ def scan_s3_resources(
             public_access_blocked,
             cors_rules,
             bucket_replication_rules,
+        )
+
+    if not migration_context.run_observability_bucket_name:
+        raise Exception(
+            "RunObservabilityBucket not found in the spacelift-infra-s3 stack. "
+            "Upgrade your installation to at least Self-Hosted v6.4.1, which creates it."
         )
 
     _process_replication_role(session, cloudformation, terraformer, migration_context)

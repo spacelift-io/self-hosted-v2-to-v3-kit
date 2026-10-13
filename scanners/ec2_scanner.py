@@ -143,7 +143,6 @@ def _scan_security_groups(ec2, cloudformation, terraformer: EC2Terraformer) -> N
             "ServerSecurityGroup",
             "DrainSecurityGroup",
             "DatabaseSecurityGroup",
-            "SchedulerSecurityGroup",
         ],
     )
     security_group_resp = ec2.describe_security_groups(GroupIds=ids)

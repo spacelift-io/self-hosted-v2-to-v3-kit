@@ -64,7 +64,7 @@ def initialize_terraformers(terraform_file: str, context: MigrationContext) -> t
 
 def check_version_requirement(session: boto3.Session) -> None:
     param_name = "/spacelift/install-version"
-    min_version_str = "2.6.0"
+    min_version_str = "6.4.1"
     min_version = version.parse(min_version_str)
 
     version_str = get_ssm_parameter(session, param_name)

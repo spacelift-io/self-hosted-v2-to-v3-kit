@@ -16,6 +16,7 @@ class SMTerraformer(Terraformer):
 
     def sm_to_terraform(self, logical_id: str, sm_secret_arn: str) -> None:
         if logical_id == "DBConnectionStringSecret":
+            self.migration_context.db_pw_secret_arn = sm_secret_arn
             self.process(self.sm_db_pw_resource_name, sm_secret_arn)
         elif logical_id == "SlackCredentialsSecret":
             self.process(self.sm_slack_resource_name, sm_secret_arn)
