@@ -148,6 +148,18 @@ def main(
         "Everything is ready to go!\n"
     )
 
+    if (
+        migration_context.target == TargetType.EKS
+        and config.load_balancer
+        and config.load_balancer.scheme == "internal"
+    ):
+        print(
+            "Warning: your V2 load balancer is internal, but the generated IngressClass creates an "
+            "internet-facing load balancer in the public subnets. Before you apply it, set "
+            "'scheme: internal' and use your private subnet IDs. See the IngressClass step in "
+            "docs/cloudformation_to_eks.md.\n"
+        )
+
 
 if __name__ == "__main__":
     args = parse_args()
