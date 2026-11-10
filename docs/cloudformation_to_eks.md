@@ -2,7 +2,7 @@
 
 This guide walks you through migrating a Spacelift Self-Hosted V2 (CloudFormation) installation to V3 using the EKS Terraform module.
 
-The EKS module ([terraform-aws-eks-spacelift-selfhosted](https://github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted)) bundles all base infrastructure (VPC, S3, RDS, ECR) together with the EKS cluster, IAM roles (IRSA), and Helm value generation into a single module. This is different from the ECS path where base infra and services are two separate modules.
+The EKS module ([terraform-aws-eks-spacelift-selfhosted](https://github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted)) bundles all base infrastructure (VPC, S3, RDS, and optionally ECR) together with the EKS cluster, IAM roles (IRSA), and Helm value generation into a single module. This is different from the ECS path where base infra and services are two separate modules.
 
 ## Installation
 
@@ -39,12 +39,17 @@ python main.py --config "<sh-v2-config-file-path.json>" --target-module eks
 Additional arguments:
 - `--profile`: AWS profile to use (optional)
 - `--output`: Output directory path for the Terraform project (default: `dist`)
+- `--container-registry`: Where the pods pull the images from, `oci` or `ecr` (default: `oci`):
+  - `oci` (recommended): the pods pull the images from `oci.spacelift.io`, our container registry for Self-Hosted. There is nothing to download, load or push.
+  - `ecr`: the module keeps managing the ECR repositories of your V2 installation, and you push the images from the Self-Hosted release archive to them. Use it when the cluster can't reach the internet, for example in air-gapped or GovCloud installations.
+
+See [Container images](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images) for more about the registry, for example how to pin the backend image by digest, or how to keep the images up to date with Renovate or Dependabot.
 
 The script will:
 1. Scan for all relevant AWS resources in your current Spacelift deployment
 2. Get the unique suffix from SSM Parameter Store (from `/spacelift/random-suffix`)
 3. Generate Terraform files in the output folder with a single `module "spacelift_eks"` block that wraps all base infrastructure and EKS resources
-4. Generate import blocks for existing resources (S3 buckets, RDS, VPC, ECR, KMS, SQS, IoT, SecretsManager)
+4. Generate import blocks for existing resources (S3 buckets, RDS, VPC, KMS, SQS, IoT, SecretsManager, and ECR with `--container-registry ecr`)
 5. Create a script to tear down the old CloudFormation stacks while retaining imported resources
 
 #### Internet gateway refactoring
@@ -66,6 +71,7 @@ If you use a custom VPC (`vpc_config.use_custom_vpc` is `true` in your V2 config
 After generation, open `main.tf` in the output directory and fill in the following values:
 
 - `local.license_token` - set this to the license token you received from Spacelift.
+- `local.spacelift_version` - set this to the Spacelift version you install, for example `v3.0.0`. With `oci`, it's also the image tag on `oci.spacelift.io`.
 - `server_acm_arn` in the `module "spacelift_eks"` block - set this to the ARN of your ACM certificate for the Spacelift server domain. You can reuse the same certificate from your existing V2 load balancer (`load_balancer.certificate_arn` in your V2 config file).
 
 ### Step 2: Apply the Generated Terraform Code
@@ -93,9 +99,21 @@ $(tofu output -raw shell)
 
 > Keep the same shell open for the remaining steps since the exported variables are needed throughout.
 
-### Step 3: Upload Container Images and Binaries
+### Step 3: Prepare Container Images and Binaries
 
-With the shell variables sourced, push the container images and launcher binary. Make sure you have the Self-Hosted release .tar.gz file available:
+#### With `oci.spacelift.io` (default)
+
+The pods pull the images from `oci.spacelift.io` when you deploy Spacelift, so there is nothing to push. They pull with the username `spacelift` and a password that you get from Spacelift together with your license. Export the password, you need it in Step 4:
+
+```shell
+export SPACELIFT_REGISTRY_PASSWORD="<registry-password-received-from-Spacelift>"
+```
+
+See [Credentials](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images#credentials) for how to change the password later.
+
+#### With your ECR repositories (`--container-registry ecr`)
+
+With the shell variables sourced, push the container images. Make sure you have the Self-Hosted release .tar.gz file available:
 
 ```shell
 # Login to the private ECR
@@ -110,8 +128,17 @@ docker push "${LAUNCHER_IMAGE}:${SPACELIFT_VERSION}"
 docker image load --input="self-hosted-${SPACELIFT_VERSION}/container-images/spacelift-backend.tar"
 docker tag "spacelift-backend:${SPACELIFT_VERSION}" "${BACKEND_IMAGE}:${SPACELIFT_VERSION}"
 docker push "${BACKEND_IMAGE}:${SPACELIFT_VERSION}"
+```
 
-# Only needed if you plan to run workers outside of Kubernetes
+If your cluster can't reach `oci.spacelift.io` but you have a machine that can, you can also copy the images from `oci.spacelift.io` to these repositories instead of loading them from the archive. See [Mirror the images to your own registry](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images#mirror-to-the-registry-from-the-terraform-modules).
+
+#### Upload the launcher binary
+
+Only needed if you plan to run workers outside of Kubernetes. This step still needs the Self-Hosted release archive:
+
+```shell
+tar -xzf self-hosted-${SPACELIFT_VERSION}.tar.gz -C .
+
 aws s3 cp --no-guess-mime-type "./self-hosted-${SPACELIFT_VERSION}/bin/spacelift-launcher" "s3://${BINARIES_BUCKET_NAME}/spacelift-launcher"
 ```
 
@@ -137,6 +164,17 @@ metadata:
   labels:
     eks.amazonaws.com/pod-readiness-gate-inject: "enabled"
 EOF
+```
+
+With `oci`, create the registry pull secret. The Spacelift pods pull their images from `oci.spacelift.io` with it. Skip this step with `ecr`:
+
+```shell
+kubectl create secret docker-registry spacelift-registry \
+  --namespace "$K8S_NAMESPACE" \
+  --docker-server=oci.spacelift.io \
+  --docker-username=spacelift \
+  --docker-password="${SPACELIFT_REGISTRY_PASSWORD}" \
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 Create the IngressClass (configures the ALB with your ACM certificate and subnets).
@@ -189,15 +227,46 @@ kubectl patch secret spacelift-server -n "$K8S_NAMESPACE" --type merge -p "{\"st
 }}"
 ```
 
-Generate the Helm values and deploy Spacelift:
+Generate the Helm values:
 
 ```shell
 tofu output -raw helm_values > spacelift-values.yaml
+```
+
+Then deploy Spacelift. The chart version is the Spacelift version without the `v` prefix.
+
+With `oci`, the `helm_values` output doesn't configure the images. Create a second values file that gives the pods the pull secret, and lets the chart set the launcher image that Kubernetes workers run:
+
+```shell
+cat > spacelift-images.yaml <<'EOF'
+shared:
+  imagePullSecrets:
+    - name: spacelift-registry
+  launcherImage:
+    enabled: true
+EOF
 
 helm upgrade \
   --repo https://downloads.spacelift.io/helm \
   spacelift \
   spacelift-self-hosted \
+  --version "${SPACELIFT_VERSION#v}" \
+  --install --wait --timeout 20m \
+  --namespace "$K8S_NAMESPACE" \
+  --values "spacelift-values.yaml" \
+  --values "spacelift-images.yaml"
+```
+
+The chart pulls the images with the tag that matches the chart version. To pin the backend image by digest, see [Configure the Helm chart](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images#configure-the-helm-chart).
+
+With `ecr`, the `helm_values` output points the chart at the images in your ECR repositories:
+
+```shell
+helm upgrade \
+  --repo https://downloads.spacelift.io/helm \
+  spacelift \
+  spacelift-self-hosted \
+  --version "${SPACELIFT_VERSION#v}" \
   --install --wait --timeout 20m \
   --namespace "$K8S_NAMESPACE" \
   --values "spacelift-values.yaml"
@@ -216,6 +285,9 @@ kubectl get ingresses --namespace "$K8S_NAMESPACE"
 Update your `CNAME` record to point your Spacelift domain to the ingress `ADDRESS`.
 
 Since your V2 installation uses AWS IoT Core as the MQTT broker, external workers will continue to connect through IoT Core and no additional MQTT DNS setup is needed.
+
+> [!IMPORTANT]
+> With `oci`, if you use [Kubernetes workers](https://docs.spacelift.io/self-hosted/latest/concepts/worker-pools/kubernetes-workers): the new deployment tells the workers to run the launcher image from `oci.spacelift.io`. Before you update the `CNAME` record, create a registry pull secret in the namespace of each worker pool and add it to the run pods of the `WorkerPool`. Otherwise runs fail because they can't pull the launcher image. See [Kubernetes worker pools](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images#kubernetes-worker-pools).
 
 To verify the traffic is properly routed, you can scale down the old ECS cluster's `server` service to 0 tasks. If you confirmed that the new `drain` service is up and running (the service is stable, the logs look good), scale down the old `drain` and `scheduler` services as well. Newer Terraform-based deployments (Self-Hosted v6.4.1 and above) have no standalone scheduler, the cron scheduler runs inside the drain. Only the CloudFormation-based installation still has it.
 
@@ -246,6 +318,7 @@ The following resources are retained by the CloudFormation stacks but **not** ma
 - `AccessLogsBucket` S3 bucket - not used by Terraform-managed deployments. You're free to set up access logging for the load balancer yourself, but the Terraform module doesn't do that by default.
 - `BucketLogsBucket` S3 bucket - not used by Terraform-managed deployments. You're free to set up S3 access logging yourself, but the Terraform module doesn't do that by default. CloudFormation can't delete the bucket as it's not empty, so you can either delete it manually or leave it as is.
   - There's access logging enabled for all of the application buckets (12 of them). If you delete the BucketLogsBucket, make sure to manually remove the access logging configuration from these buckets as well. The setting can be found in the AWS console under the **Properties** tab of the bucket, under **Server access logging**.
+- `ECRRepository` and `LauncherECRRepository` ECR repositories (`spacelift` and `spacelift-launcher`) - only with `--container-registry oci`. The new deployment pulls the images from `oci.spacelift.io`, so it doesn't use these repositories. The CloudFormation deletion script keeps them, so you can delete them manually once the old ECS cluster is gone, or leave them as they are.
 - `XrayECRRepository` ECR repository - XRay is not part of the Terraform-managed deployment by default. CloudFormation can't delete the repository as it's not empty, so you can either delete it manually or leave it as is.
 - `BastionSecurityGroup` security group - bastion host is not part of the Terraform-managed deployment. If you use a bastion host, add it to your Terraform project and `import` it. Otherwise, you can manually delete it.
 - `InstallationTaskSecurityGroup` security group - this was used for the installation task, which no longer exists in Terraform-managed deployments. CloudFormation can't delete it because the database security group's inbound rules reference it. You can manually clean it up.

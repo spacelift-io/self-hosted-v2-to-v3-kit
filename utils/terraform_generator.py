@@ -163,10 +163,15 @@ provider "aws" {{
 
 
 def create_locals_block(context: MigrationContext) -> str:
+    if context.uses_ecr:
+        version_comment = 'This is the tag of the Docker images uploaded to the "spacelift" and "spacelift-launcher" ECRs.'
+    else:
+        version_comment = "The Spacelift version to install. It is also the tag of the images on oci.spacelift.io."
+
     return f"""
 locals {{
   region            = "{context.config.aws_region}"
-  spacelift_version = "v3.0.0" # TODO: This is the tag of the Docker images uploaded to the "spacelift" and "spacelift-launcher" ECRs.
+  spacelift_version = "v3.0.0" # TODO: {version_comment}
   website_domain    = "{context.cors_origin.replace('https://', '')}"
   website_endpoint  = "https://${{local.website_domain}}"
   license_token     = "<TODO: you need to set this value>" # This value must be set to the license token you received from Spacelift.
@@ -198,6 +203,21 @@ def get_db_password_arn(context: MigrationContext) -> str:
     else:
         # Use the default created secret
         return "aws_secretsmanager_secret.db_pw.arn"
+
+
+def create_container_registry_section(context: MigrationContext) -> str:
+    if context.uses_ecr:
+        return """
+  number_of_images_to_retain   = 10
+  backend_ecr_repository_name  = "spacelift"
+  launcher_ecr_repository_name = "spacelift-launcher"
+""".strip("\n")
+
+    return """
+  # The services pull the images from oci.spacelift.io, so the module doesn't manage the
+  # "spacelift" and "spacelift-launcher" ECR repositories of the V2 installation.
+  create_container_registry = false
+""".strip("\n")
 
 
 def create_spacelift_module(unique_suffix: str, context: MigrationContext) -> str:
@@ -235,9 +255,9 @@ def create_spacelift_module(unique_suffix: str, context: MigrationContext) -> st
   private_subnet_cidr_blocks = {private_subnet_cidr_blocks}
 """
 
-    return f"""        
+    return f"""
 module "spacelift" {{
-  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v3.3.0"
+  source = "github.com/spacelift-io/terraform-aws-spacelift-selfhosted?ref=v3.4.0"
 
   region           = local.region
   website_endpoint = local.website_endpoint
@@ -263,10 +283,8 @@ module "spacelift" {{
   kms_arn                       = aws_kms_key.master.arn
   kms_master_key_multi_regional = false
   kms_jwt_key_multi_regional    = false
-{vpc_config}        
-  number_of_images_to_retain   = 10
-  backend_ecr_repository_name  = "spacelift"
-  launcher_ecr_repository_name = "spacelift-launcher"
+{vpc_config}
+{create_container_registry_section(context)}
 
   security_group_names = {{
     database    = "database_sg"
@@ -338,10 +356,37 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
             )
         additional_env_vars += "\n#  ]"
 
+    if context.uses_ecr:
+        registry_password_variable = ""
+        images_section = """
+#  backend_image      = module.spacelift.ecr_backend_repository_url
+#  backend_image_tag  = local.spacelift_version
+#  launcher_image     = module.spacelift.ecr_launcher_repository_url
+#  launcher_image_tag = local.spacelift_version
+""".strip("\n")
+    else:
+        registry_password_variable = """
+#variable "registry_password" {
+#  type        = string
+#  sensitive   = true
+#  description = "The password for oci.spacelift.io, received from Spacelift together with your license."
+#}
+#
+""".lstrip("\n")
+        images_section = """
+#  # backend_image and launcher_image default to oci.spacelift.io/deploy/backend and
+#  # oci.spacelift.io/deploy/launcher. The tasks pull the backend image with registry_credentials.
+#  backend_image_tag  = local.spacelift_version
+#  launcher_image_tag = local.spacelift_version
+#  registry_credentials = {
+#    password = var.registry_password # The username defaults to "spacelift".
+#  }
+""".strip("\n")
+
     return f"""
 # Uncomment after the above module applied successfully
-#module "spacelift_services" {{
-#  source = "github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted?ref=v3.1.0"
+{registry_password_variable}#module "spacelift_services" {{
+#  source = "github.com/spacelift-io/terraform-aws-ecs-spacelift-selfhosted?ref=v3.2.0"
 #  
 #  region               = local.region
 #  unique_suffix        = module.spacelift.unique_suffix
@@ -385,10 +430,7 @@ def create_spacelift_services_module(context: MigrationContext) -> str:
 {db_secret}
 #  ]
 #  
-#  backend_image      = module.spacelift.ecr_backend_repository_url
-#  backend_image_tag  = local.spacelift_version
-#  launcher_image     = module.spacelift.ecr_launcher_repository_url
-#  launcher_image_tag = local.spacelift_version
+{images_section}
 
 #  server_log_configuration = {{
 #    logDriver : "awslogs",
@@ -493,7 +535,7 @@ def create_eks_module(unique_suffix: str, context: MigrationContext) -> str:
 
     return f"""
 module "spacelift_eks" {{
-  source = "github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted?ref=v4.3.0"
+  source = "github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted?ref=v4.5.0"
 
   eks_upgrade_policy  = {{
     support_type = "STANDARD"
@@ -524,9 +566,7 @@ module "spacelift_eks" {{
     run_observability = {{ name = "{context.run_observability_bucket_name}", expiration_days = {context.run_observability_bucket_expiration_days} }}
   }}
 {vpc_config}
-  number_of_images_to_retain   = 10
-  backend_ecr_repository_name  = "spacelift"
-  launcher_ecr_repository_name = "spacelift-launcher"
+{create_container_registry_section(context)}
 
   security_group_names = {{
     database  = "database_sg"

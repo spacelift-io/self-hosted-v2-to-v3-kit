@@ -11,7 +11,7 @@ from converters.s3_to_terraform import S3Terraformer
 from converters.kms_to_terraform import KMSTerraformer
 from converters.ec2_to_terraform import EC2Terraformer
 from converters.sm_to_terraform import SMTerraformer
-from converters.migration_context import MigrationContext, TargetType
+from converters.migration_context import ContainerRegistry, MigrationContext, TargetType
 
 from converters.sqs_to_terraform import SQSTerraformer
 from scanners.iot_scanner import scan_iot_resources
@@ -105,7 +105,11 @@ def get_unique_suffix(session: boto3.Session) -> str:
 
 
 def main(
-    config_path: str, profile: Optional[str], output_dir: str, target_module: str = "ecs"
+    config_path: str,
+    profile: Optional[str],
+    output_dir: str,
+    target_module: str = "ecs",
+    container_registry: str = "oci",
 ) -> None:
     config = load_app_config(config_path)
 
@@ -117,6 +121,7 @@ def main(
     terraform_file = initialize_output_dir(output_dir)
     migration_context = MigrationContext()
     migration_context.target = TargetType(target_module)
+    migration_context.container_registry = ContainerRegistry(container_registry)
     migration_context.config = config
 
     (
@@ -135,7 +140,8 @@ def main(
     scan_s3_resources(session, unique_suffix, s3_terraformer)
     scan_kms_resources(session, kms_terraformer)
     scan_ec2_resources(session, ec2_terraformer)
-    scan_ecr_resources(ecr_terraformer)
+    if migration_context.uses_ecr:
+        scan_ecr_resources(ecr_terraformer)
     scan_sm_resources(session, sm_terraformer)
     scan_rds_resources(session, rds_terraformer)
     scan_iot_resources(iot_terraformer)
@@ -168,4 +174,5 @@ if __name__ == "__main__":
         profile=args.profile,
         output_dir=args.output,
         target_module=args.target_module,
+        container_registry=args.container_registry,
     )
