@@ -57,6 +57,10 @@ python <output-folder>/internet_gateway_refactor.py [--profile AWS_PROFILE (opti
 
 > The reason this is a separate script instead of being part of the Terraform code is that Terraform has trouble properly ordering the removal and addition of internet gateway subnet associations, and AWS is very picky about the order of these operations.
 
+#### Custom VPC
+
+If you use a custom VPC (`vpc_config.use_custom_vpc` is `true` in your V2 config file), the module deploys into your existing VPC: the EKS cluster and the database use `vpc_config.private_subnet_ids`, and the load balancer uses `vpc_config.public_subnet_ids`. The module doesn't change your VPC or subnets, so make sure they meet the EKS requirements, such as subnet tags and DNS hostnames. See [Deploy into an existing VPC](https://github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted#deploy-into-an-existing-vpc) in the module README.
+
 #### Configure the generated Terraform files
 
 After generation, open `main.tf` in the output directory and fill in the following values:
