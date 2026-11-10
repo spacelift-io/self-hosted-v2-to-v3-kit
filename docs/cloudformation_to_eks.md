@@ -139,19 +139,24 @@ metadata:
 EOF
 ```
 
-Create the IngressClass (configures the ALB with your ACM certificate and subnets):
+Create the IngressClass (configures the ALB with your ACM certificate and subnets).
+
+> [!WARNING]
+> The generated IngressClass always creates an internet-facing load balancer in the public subnets. Check `load_balancer.scheme` in your V2 config file and follow only one of the two options below.
+
+If your V2 load balancer is internet-facing, apply the output as is:
 
 ```shell
 tofu output -raw kubernetes_ingress_class | kubectl apply -f -
 ```
 
-> [!WARNING]
-> The generated IngressClass always creates an internet-facing load balancer in the public subnets. If your V2 load balancer is internal (`load_balancer.scheme` is `internal` in your V2 config file), don't apply the output as is. Save it to a file, then in the `IngressClassParams` resource set `scheme: internal` and replace the subnet IDs with the private subnet IDs of your VPC. With a custom VPC, these are `vpc_config.private_subnet_ids` in your V2 config file. Then apply the file:
-> ```shell
-> tofu output -raw kubernetes_ingress_class > ingress-class.yaml
-> # edit ingress-class.yaml
-> kubectl apply -f ingress-class.yaml
-> ```
+If your V2 load balancer is internal (`load_balancer.scheme` is `internal`), save the output to a file. In the `IngressClassParams` resource, set `scheme: internal` and replace the subnet IDs with the private subnet IDs of your VPC. With a custom VPC, these are `vpc_config.private_subnet_ids` in your V2 config file. Then apply the file:
+
+```shell
+tofu output -raw kubernetes_ingress_class > ingress-class.yaml
+# edit ingress-class.yaml
+kubectl apply -f ingress-class.yaml
+```
 
 Create the Kubernetes secrets used by Spacelift services:
 
