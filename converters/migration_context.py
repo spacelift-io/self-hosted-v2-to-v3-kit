@@ -8,9 +8,15 @@ class TargetType(Enum):
     EKS = "eks"
 
 
+class ContainerRegistry(Enum):
+    OCI = "oci"
+    ECR = "ecr"
+
+
 class MigrationContext:
     def __init__(self):
         self.target: TargetType = TargetType.ECS
+        self.container_registry: ContainerRegistry = ContainerRegistry.OCI
 
         # App config loaded from the SH v2 config file
         self.config: AppConfig = None
@@ -85,6 +91,10 @@ class MigrationContext:
         if self.target == TargetType.EKS:
             return "module.spacelift_eks.module.spacelift."
         return "module.spacelift."
+
+    @property
+    def uses_ecr(self) -> bool:
+        return self.container_registry == ContainerRegistry.ECR
 
     @property
     def module_output_ref(self) -> str:
