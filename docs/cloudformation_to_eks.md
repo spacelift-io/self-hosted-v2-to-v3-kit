@@ -41,7 +41,7 @@ Additional arguments:
 - `--output`: Output directory path for the Terraform project (default: `dist`)
 - `--container-registry`: Where the pods pull the images from, `oci` or `ecr` (default: `oci`):
   - `oci` (recommended): the pods pull the images from `oci.spacelift.io`, our container registry for Self-Hosted. There is nothing to download, load or push.
-  - `ecr`: the module keeps managing the ECR repositories of your V2 installation, and you push the images from the Self-Hosted release archive to them. Use it when the cluster can't reach the internet, for example in air-gapped or GovCloud installations.
+  - `ecr`: the module keeps managing the ECR repositories of your V2 installation, and you push the images from the Self-Hosted release archive to them. Use it when the cluster, or the nodes of your [Kubernetes worker pools](https://docs.spacelift.io/self-hosted/latest/concepts/worker-pools/kubernetes-workers), can't reach `oci.spacelift.io`, for example in air-gapped or GovCloud installations. With `oci`, the new deployment tells the workers to run the launcher image from `oci.spacelift.io`.
 
 See [Container images](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images) for more about the registry, for example how to pin the backend image by digest, or how to keep the images up to date with Renovate or Dependabot.
 
@@ -71,7 +71,7 @@ If you use a custom VPC (`vpc_config.use_custom_vpc` is `true` in your V2 config
 After generation, open `main.tf` in the output directory and fill in the following values:
 
 - `local.license_token` - set this to the license token you received from Spacelift.
-- `local.spacelift_version` - set this to the Spacelift version you install, for example `v3.0.0`. With `oci`, it's also the image tag on `oci.spacelift.io`.
+- `local.spacelift_version` - set this to the Spacelift version you install, for example `v6.4.1`. See the [compatibility matrix](../README.md#-compatibility-matrix) for the supported versions. With `oci`, it's also the image tag on `oci.spacelift.io`.
 - `server_acm_arn` in the `module "spacelift_eks"` block - set this to the ARN of your ACM certificate for the Spacelift server domain. You can reuse the same certificate from your existing V2 load balancer (`load_balancer.certificate_arn` in your V2 config file).
 
 ### Step 2: Apply the Generated Terraform Code
@@ -134,12 +134,14 @@ If your cluster can't reach `oci.spacelift.io` but you have a machine that can, 
 
 #### Upload the launcher binary
 
-Only needed if you plan to run workers outside of Kubernetes. This step still needs the Self-Hosted release archive:
+Only needed if you plan to run workers outside of Kubernetes. The CloudFormation worker pool template downloads `spacelift-launcher-amd64` or `spacelift-launcher-arm64`, depending on the instance architecture. Pools created from an older template download `spacelift-launcher`, which is the amd64 binary. Upload all 3 keys, see [Downloading the launcher](https://docs.spacelift.io/self-hosted/latest/concepts/worker-pools/docker-based-workers#downloading-the-launcher) for the details. This step still needs the Self-Hosted release archive:
 
 ```shell
 tar -xzf self-hosted-${SPACELIFT_VERSION}.tar.gz -C .
 
 aws s3 cp --no-guess-mime-type "./self-hosted-${SPACELIFT_VERSION}/bin/spacelift-launcher" "s3://${BINARIES_BUCKET_NAME}/spacelift-launcher"
+aws s3 cp --no-guess-mime-type "./self-hosted-${SPACELIFT_VERSION}/bin/spacelift-launcher" "s3://${BINARIES_BUCKET_NAME}/spacelift-launcher-amd64"
+aws s3 cp --no-guess-mime-type "./self-hosted-${SPACELIFT_VERSION}/bin/spacelift-launcher-arm64" "s3://${BINARIES_BUCKET_NAME}/spacelift-launcher-arm64"
 ```
 
 ### Step 4: Deploy Spacelift to EKS
@@ -287,7 +289,7 @@ Update your `CNAME` record to point your Spacelift domain to the ingress `ADDRES
 Since your V2 installation uses AWS IoT Core as the MQTT broker, external workers will continue to connect through IoT Core and no additional MQTT DNS setup is needed.
 
 > [!IMPORTANT]
-> With `oci`, if you use [Kubernetes workers](https://docs.spacelift.io/self-hosted/latest/concepts/worker-pools/kubernetes-workers): the new deployment tells the workers to run the launcher image from `oci.spacelift.io`. Before you update the `CNAME` record, create a registry pull secret in the namespace of each worker pool and add it to the run pods of the `WorkerPool`. Otherwise runs fail because they can't pull the launcher image. See [Kubernetes worker pools](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images#kubernetes-worker-pools).
+> With `oci`, if you use [Kubernetes workers](https://docs.spacelift.io/self-hosted/latest/concepts/worker-pools/kubernetes-workers): the new deployment tells the workers to run the launcher image from `oci.spacelift.io`. Before you update the `CNAME` record, make sure the worker nodes can reach `oci.spacelift.io`, then create a registry pull secret in the namespace of each worker pool and add it to the run pods of the `WorkerPool`. Otherwise runs fail because they can't pull the launcher image. See [Kubernetes worker pools](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images#kubernetes-worker-pools).
 
 To verify the traffic is properly routed, you can scale down the old ECS cluster's `server` service to 0 tasks. If you confirmed that the new `drain` service is up and running (the service is stable, the logs look good), scale down the old `drain` and `scheduler` services as well. Newer Terraform-based deployments (Self-Hosted v6.4.1 and above) have no standalone scheduler, the cron scheduler runs inside the drain. Only the CloudFormation-based installation still has it.
 

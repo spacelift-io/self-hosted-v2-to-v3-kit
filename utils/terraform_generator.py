@@ -164,14 +164,14 @@ provider "aws" {{
 
 def create_locals_block(context: MigrationContext) -> str:
     if context.uses_ecr:
-        version_comment = 'This is the tag of the Docker images uploaded to the "spacelift" and "spacelift-launcher" ECRs.'
+        version_comment = 'The tag of the Docker images uploaded to the "spacelift" and "spacelift-launcher" ECRs, for example v6.4.1.'
     else:
-        version_comment = "The Spacelift version to install. It is also the tag of the images on oci.spacelift.io."
+        version_comment = "The Spacelift version to install, for example v6.4.1. It is also the tag of the images on oci.spacelift.io."
 
     return f"""
 locals {{
   region            = "{context.config.aws_region}"
-  spacelift_version = "v3.0.0" # TODO: {version_comment}
+  spacelift_version = "<TODO: you need to set this value>" # {version_comment}
   website_domain    = "{context.cors_origin.replace('https://', '')}"
   website_endpoint  = "https://${{local.website_domain}}"
   license_token     = "<TODO: you need to set this value>" # This value must be set to the license token you received from Spacelift.

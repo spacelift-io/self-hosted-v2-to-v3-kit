@@ -55,7 +55,7 @@ Set the following environment variables first:
 # The region of your existing Self-Hosted installation.
 AWS_REGION="<replace-me>"
 
-# The version you are installing, for example v3.0.0.
+# The version you are installing, for example v6.4.1. See the README for the supported versions.
 SPACELIFT_VERSION="<replace-me>"
 
 # The name of your downloads bucket, for example 012345678901-spacelift-downloads-ab12de3
@@ -66,7 +66,7 @@ DOWNLOADS_BUCKET_NAME="<replace-me>"
 
 The ECS tasks pull the backend image from `oci.spacelift.io` with the username `spacelift` and a password that you get from Spacelift together with your license. You need the password in Step 3. See [Credentials](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images#credentials) for how to change it later.
 
-The ECS tasks need outbound access to `oci.spacelift.io`. If your ECS subnets can't reach the internet, use `ecr` instead.
+The ECS tasks need outbound access to `oci.spacelift.io`. So do the nodes of your [Kubernetes worker pools](https://docs.spacelift.io/self-hosted/latest/concepts/worker-pools/kubernetes-workers), if you have any, because the new services tell the workers to run the launcher image from `oci.spacelift.io`. If either can't reach it, use `ecr` instead.
 
 #### With your ECR repositories (`--container-registry ecr`)
 
@@ -94,12 +94,14 @@ If your ECS tasks can't reach `oci.spacelift.io` but you have a machine that can
 
 #### Upload the launcher binary
 
-With both options, upload the new launcher binary to the downloads bucket. This step still needs the Self-Hosted release archive:
+With both options, upload the new launcher binaries to the downloads bucket. The CloudFormation worker pool template downloads `spacelift-launcher-amd64` or `spacelift-launcher-arm64`, depending on the instance architecture. Pools created from an older template download `spacelift-launcher`, which is the amd64 binary. Upload all 3 keys, see [Downloading the launcher](https://docs.spacelift.io/self-hosted/latest/concepts/worker-pools/docker-based-workers#downloading-the-launcher) for the details. This step still needs the Self-Hosted release archive:
 
 ```shell
 tar -xzf self-hosted-${SPACELIFT_VERSION}.tar.gz -C .
 
 aws s3 cp --no-guess-mime-type "./self-hosted-${SPACELIFT_VERSION}/bin/spacelift-launcher" "s3://${DOWNLOADS_BUCKET_NAME}/spacelift-launcher"
+aws s3 cp --no-guess-mime-type "./self-hosted-${SPACELIFT_VERSION}/bin/spacelift-launcher" "s3://${DOWNLOADS_BUCKET_NAME}/spacelift-launcher-amd64"
+aws s3 cp --no-guess-mime-type "./self-hosted-${SPACELIFT_VERSION}/bin/spacelift-launcher-arm64" "s3://${DOWNLOADS_BUCKET_NAME}/spacelift-launcher-arm64"
 ```
 
 ### Step 2: Generate Terraform project
@@ -159,7 +161,7 @@ Navigate to the output directory and follow these steps:
 
 2. Configure the variables in `main.tf`:
    - Set `local.license_token` with your Spacelift license token
-   - Set `local.spacelift_version` to the Spacelift version you install, for example `v3.0.0`. With `oci`, it's also the image tag on `oci.spacelift.io`. With `ecr`, set it to the Docker tag you pushed to the ECR repositories.
+   - Set `local.spacelift_version` to the Spacelift version you install, for example `v6.4.1`. See the [compatibility matrix](../README.md#-compatibility-matrix) for the supported versions. With `oci`, it's also the image tag on `oci.spacelift.io`. With `ecr`, set it to the Docker tag you pushed to the ECR repositories.
 
 3. (Optional) Backend and resource tagging:
    - You could optionally set up [a remote backend](https://developer.hashicorp.com/terraform/language/backend) for Terraform state management in `main.tf`. The generated code uses a local backend by default, but you can change it to use S3 or any other supported backend.
@@ -201,14 +203,18 @@ Navigate to the output directory and follow these steps:
    ```
 
 7. Update the Terraform configuration:
-   - Uncomment the `spacelift_services` module in `main.tf`. With `oci`, also uncomment the `registry_password` variable above it.
+   - Uncomment the `spacelift_services` module in `main.tf`. With `oci`, also uncomment the `registry_password` variable above it, unless you create the secret yourself (see below).
    - Comment out the entire contents of `imports.tf` file (they're no longer needed after the imports are done)
 
    With `oci`, pass the registry password from Step 1 to OpenTofu:
    ```shell
    export TF_VAR_registry_password="<registry-password-received-from-Spacelift>"
    ```
-   The module keeps the password in a Secrets Manager secret, and the ECS tasks pull the backend image with it. The password isn't saved in the state, but it is in the plan file. To keep it out of the plan file too, create the secret yourself and pass `byo_registry_credentials_secret` instead of `registry_credentials`. See [ECS](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images#ecs) for details.
+   The module keeps the password in a Secrets Manager secret, and the ECS tasks pull the backend image with it. The password isn't saved in the state, but it is in the plan file.
+
+   To keep the password out of the plan file too, create the secret yourself, see [ECS](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images#ecs). Then:
+   - replace `registry_credentials` in the `spacelift_services` module with `byo_registry_credentials_secret`
+   - leave the `registry_password` variable commented out and don't set `TF_VAR_registry_password`. OpenTofu saves the values of root variables in the plan file even when nothing uses them.
 
 8. Re-initialize and plan the new resources:
    ```bash
@@ -230,7 +236,7 @@ Navigate to the output directory and follow these steps:
    ```
 
 10. Redirect traffic:
-   - With `oci`, if you use [Kubernetes workers](https://docs.spacelift.io/self-hosted/latest/concepts/worker-pools/kubernetes-workers): the new services tell the workers to run the launcher image from `oci.spacelift.io`. Before you redirect traffic, create a registry pull secret in the namespace of each worker pool and add it to the run pods of the `WorkerPool`. Otherwise runs fail because they can't pull the launcher image. See [Kubernetes worker pools](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images#kubernetes-worker-pools).
+   - With `oci`, if you use [Kubernetes workers](https://docs.spacelift.io/self-hosted/latest/concepts/worker-pools/kubernetes-workers): the new services tell the workers to run the launcher image from `oci.spacelift.io`. Before you redirect traffic, make sure the worker nodes can reach `oci.spacelift.io`, then create a registry pull secret in the namespace of each worker pool and add it to the run pods of the `WorkerPool`. Otherwise runs fail because they can't pull the launcher image. See [Kubernetes worker pools](https://docs.spacelift.io/self-hosted/latest/installing-spacelift/reference-architecture/reference/container-images#kubernetes-worker-pools).
    - Update your `CNAME` record to point to the new load balancer DNS name (available as an output)
    - To make sure the traffic is properly routed, you can scale down the old ECS cluster's `server` service to 0 tasks
    - If you confirmed that the new `drain` service is up and running (the service is stable, the logs look good), scale down the old `drain` and `scheduler` services as well. Newer Terraform-based deployments have no standalone `scheduler` service, the cron scheduler runs inside the drain service.
