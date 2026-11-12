@@ -57,6 +57,10 @@ python <output-folder>/internet_gateway_refactor.py [--profile AWS_PROFILE (opti
 
 > The reason this is a separate script instead of being part of the Terraform code is that Terraform has trouble properly ordering the removal and addition of internet gateway subnet associations, and AWS is very picky about the order of these operations.
 
+#### Custom VPC
+
+If you use a custom VPC (`vpc_config.use_custom_vpc` is `true` in your V2 config file), the module deploys into your existing VPC: the EKS cluster and the database use `vpc_config.private_subnet_ids`, and the load balancer uses `vpc_config.public_subnet_ids`. The module doesn't change your VPC or subnets, so make sure they meet the EKS requirements, such as subnet tags and DNS hostnames. See [Deploy into an existing VPC](https://github.com/spacelift-io/terraform-aws-eks-spacelift-selfhosted#deploy-into-an-existing-vpc) in the module README.
+
 #### Configure the generated Terraform files
 
 After generation, open `main.tf` in the output directory and fill in the following values:
@@ -135,10 +139,23 @@ metadata:
 EOF
 ```
 
-Create the IngressClass (configures the ALB with your ACM certificate and subnets):
+Create the IngressClass (configures the ALB with your ACM certificate and subnets).
+
+> [!WARNING]
+> The generated IngressClass always creates an internet-facing load balancer in the public subnets. Check `load_balancer.scheme` in your V2 config file and follow only one of the two options below.
+
+If your V2 load balancer is internet-facing, apply the output as is:
 
 ```shell
 tofu output -raw kubernetes_ingress_class | kubectl apply -f -
+```
+
+If your V2 load balancer is internal (`load_balancer.scheme` is `internal`), save the output to a file. In the `IngressClassParams` resource, set `scheme: internal` and replace the subnet IDs with the private subnet IDs of your VPC. With a custom VPC, these are `vpc_config.private_subnet_ids` in your V2 config file. Then apply the file:
+
+```shell
+tofu output -raw kubernetes_ingress_class > ingress-class.yaml
+# edit ingress-class.yaml
+kubectl apply -f ingress-class.yaml
 ```
 
 Create the Kubernetes secrets used by Spacelift services:

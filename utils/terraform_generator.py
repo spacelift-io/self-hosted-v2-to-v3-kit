@@ -474,7 +474,9 @@ def create_eks_module(unique_suffix: str, context: MigrationContext) -> str:
     if context.config.vpc_config and context.config.vpc_config.use_custom_vpc:
         vpc_config = f"""
   create_vpc             = false
-  rds_subnet_ids         = {format_subnet_ids(context.config.vpc_config.private_subnet_ids)}
+  vpc_id                 = "{context.config.vpc_config.vpc_id}"
+  private_subnet_ids     = {format_subnet_ids(context.config.vpc_config.private_subnet_ids)}
+  public_subnet_ids      = {format_subnet_ids(context.config.vpc_config.public_subnet_ids)}
   rds_security_group_ids = ["{context.config.vpc_config.database_security_group_id}"]
 """
     else:
