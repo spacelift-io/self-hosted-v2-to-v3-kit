@@ -15,7 +15,8 @@ The migration workflow follows these steps:
 6. Remove old CloudFormation stacks while retaining necessary resources
 
 Key features:
-- Scans and imports existing AWS resources (VPC, EC2, ECR, RDS, S3, KMS, IoT, SQS, etc.)
+- Scans and imports existing AWS resources (VPC, EC2, RDS, S3, KMS, IoT, SQS, etc.)
+- Pulls the Spacelift images from `oci.spacelift.io` by default. With `--container-registry ecr`, it imports your ECR repositories and keeps using them instead, for example in air-gapped or GovCloud installations.
 - Generates all necessary Terraform files
 - Creates a script to handle a small structural difference between CloudFormation and Terraform (Internet gateway refactoring)
 - Creates a script to tear down the old CloudFormation stacks with retaining resources
@@ -34,6 +35,7 @@ Key features:
 | >= 2.6.0          | 2.0.0                 | 2.1.1                                                                                      | 2.1.0                                                                                    |
 | >= 6.0.0          | 2.1.0                 | 2.2.0                                                                                      | 2.5.0                                                                                    |
 | >= 6.4.1          | 3.0.0                 | 3.3.0                                                                                      | 3.1.0                                                                                    |
+| >= 6.4.1          | 4.0.0                 | 3.4.0                                                                                      | 3.2.0                                                                                    |
 
 ### EKS
 
@@ -42,6 +44,7 @@ Key features:
 | >= 4.0.0          | 2.0.0                 | 3.4.0                                                                                    |
 | >= 6.0.0          | 2.1.0                 | 3.9.0                                                                                    |
 | >= 6.4.1          | 3.0.0                 | 4.3.0                                                                                    |
+| >= 6.4.1          | 4.0.0                 | 4.5.0                                                                                    |
 
 ## 📦 Requirements
 
